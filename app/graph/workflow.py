@@ -1,8 +1,8 @@
 """
-HisabBot Workflow — v5 (Fully Dynamic)
+HisabBot Workflow — v6 (Specialized Query Builders)
 
-Single pipeline for everything:
-  router_node → query_builder_node → query_executor_node → responder_node
+Single pipeline:
+  router → query_builder (dispatches to specialized builders in parallel) → query_executor → responder
 """
 from langgraph.graph import StateGraph, END
 from .state import AgentState
@@ -10,21 +10,21 @@ from .nodes import router_node, query_builder_node, query_executor_node, respond
 
 workflow = StateGraph(AgentState)
 
-workflow.add_node("router",          router_node)
-workflow.add_node("query_builder",   query_builder_node)
-workflow.add_node("query_executor",  query_executor_node)
-workflow.add_node("responder",       responder_node)
+workflow.add_node("router",         router_node)
+workflow.add_node("query_builder",  query_builder_node)
+workflow.add_node("query_executor", query_executor_node)
+workflow.add_node("responder",      responder_node)
 
 workflow.set_entry_point("router")
 
-# Route: unknown goes straight to responder, everything else builds a query
 workflow.add_conditional_edges(
     "router",
-    lambda x: "responder" if x["intent"] == "unknown" else "query_builder",
-    {
-        "query_builder": "query_builder",
-        "responder":     "responder",
-    }
+    lambda x: "responder" if (
+        x.get("tasks") and
+        x["tasks"][0].get("intent") == "unknown" and
+        len(x["tasks"]) == 1
+    ) else "query_builder",
+    {"query_builder": "query_builder", "responder": "responder"}
 )
 
 workflow.add_edge("query_builder",  "query_executor")

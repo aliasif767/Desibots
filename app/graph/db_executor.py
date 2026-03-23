@@ -287,6 +287,28 @@ async def execute_plan(plan: dict) -> dict:
             upsert = bool(plan.get("upsert", False))
             if not update:
                 return {"ok": False, "error": f"{operation} needs an 'update' field."}
+
+            # Safety fix: if $inc targets total_credit on customers collection,
+            # first ensure the field is numeric (not null) to prevent MongoDB error 14.
+            # We do this by running a $set: {total_credit: 0} on docs where it is null/missing.
+            if collection == "customers" and "$inc" in update:
+                inc_fields = update["$inc"]
+                if "total_credit" in inc_fields:
+                    inc_val = inc_fields["total_credit"]
+                    # Guard: if the increment value itself is null/None, skip to avoid error
+                    if inc_val is None:
+                        return {"ok": False,
+                                "error": "total_credit increment value is null — selling price was not provided"}
+                    # Initialize null/missing total_credit to 0 before incrementing
+                    # This runs even on docs that don't exist yet (upsert safety)
+                    await col.update_many(
+                        {"$or": [
+                            {**filt, "total_credit": None},
+                            {**filt, "total_credit": {"$exists": False}}
+                        ]},
+                        {"$set": {"total_credit": 0}}
+                    )
+
             if operation == "update_one":
                 r = await col.update_one(filt, update, upsert=upsert)
             else:

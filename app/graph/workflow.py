@@ -1,9 +1,3 @@
-"""
-HisabBot Workflow — v6 (Specialized Query Builders)
-
-Single pipeline:
-  router → query_builder (dispatches to specialized builders in parallel) → query_executor → responder
-"""
 from langgraph.graph import StateGraph, END
 from .state import AgentState
 from .nodes import router_node, query_builder_node, query_executor_node, responder_node
@@ -17,13 +11,17 @@ workflow.add_node("responder",      responder_node)
 
 workflow.set_entry_point("router")
 
+def _route(x):
+    tasks  = x.get("tasks") or []
+    intent = tasks[0].get("intent","unknown") if tasks else "unknown"
+    # conversation and unknown skip DB entirely
+    if intent in ("unknown","conversation"):
+        return "responder"
+    return "query_builder"
+
 workflow.add_conditional_edges(
     "router",
-    lambda x: "responder" if (
-        x.get("tasks") and
-        x["tasks"][0].get("intent") == "unknown" and
-        len(x["tasks"]) == 1
-    ) else "query_builder",
+    _route,
     {"query_builder": "query_builder", "responder": "responder"}
 )
 

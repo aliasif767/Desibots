@@ -45,22 +45,82 @@ hr{border-color:#1c2030 !important;}
   color:#9ca3af !important;border-radius:10px !important;font-size:13px !important;transition:all 0.15s !important;}
 .stButton>button:hover{border-color:#34d399 !important;color:#34d399 !important;background:#052e20 !important;}
 
-/* Report styles */
-.report-card{background:#0f1218;border:1px solid #1c2030;border-radius:12px;padding:20px 24px;margin-bottom:16px;}
-.report-header{font-size:13px;font-family:'JetBrains Mono',monospace;color:#4b5563;letter-spacing:0.08em;margin-bottom:12px;}
-.report-title{font-size:20px;font-weight:600;color:#f1f5f9;margin-bottom:4px;}
-.report-sub{font-size:12px;color:#4b5563;margin-bottom:16px;}
-.section-hd{font-size:11px;font-family:'JetBrains Mono',monospace;color:#34d399;letter-spacing:0.1em;
-  margin:18px 0 8px;padding-bottom:4px;border-bottom:1px solid #1c2030;}
-.report-body{font-size:14px;color:#d1d5db;line-height:1.8;white-space:pre-wrap;}
+/* ══ REPORT STYLES ══════════════════════════════════════════════════════════ */
+.report-card{background:#0f1218;border:1px solid #1c2030;border-radius:14px;padding:22px 26px;margin-bottom:18px;position:relative;overflow:hidden;}
+.report-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,#34d399,#60a5fa,#a78bfa);opacity:0.5;}
+.report-header{font-size:11px;font-family:'JetBrains Mono',monospace;color:#4b5563;letter-spacing:0.1em;margin-bottom:10px;text-transform:uppercase;}
+.report-title{font-size:22px;font-weight:700;color:#f1f5f9;margin-bottom:3px;letter-spacing:-0.02em;}
+.report-sub{font-size:12px;color:#4b5563;margin-bottom:0;}
+.section-hd{font-size:10px;font-family:'JetBrains Mono',monospace;color:#34d399;letter-spacing:0.12em;
+  margin:20px 0 12px;padding-bottom:6px;border-bottom:1px solid #1c2030;text-transform:uppercase;display:flex;align-items:center;gap:6px;}
+.report-body{font-size:14px;color:#d1d5db;line-height:1.8;}
+
+/* KPI Grid */
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:4px;}
+.kpi-card{background:#080a0f;border:1px solid #1c2030;border-radius:10px;padding:14px 16px;text-align:center;}
+.kpi-label{font-size:9px;font-family:'JetBrains Mono',monospace;color:#4b5563;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:6px;}
+.kpi-value{font-size:20px;font-weight:700;letter-spacing:-0.02em;}
+.kpi-green{color:#34d399;}.kpi-blue{color:#60a5fa;}.kpi-purple{color:#a78bfa;}.kpi-yellow{color:#fbbf24;}.kpi-red{color:#f87171;}
+
+/* Data table */
+.rpt-table{width:100%;border-collapse:collapse;font-size:13px;}
+.rpt-table th{font-family:'JetBrains Mono',monospace;font-size:9px;color:#4b5563;letter-spacing:0.08em;
+  text-transform:uppercase;padding:6px 10px;border-bottom:1px solid #1c2030;text-align:left;font-weight:500;}
+.rpt-table td{padding:9px 10px;border-bottom:1px solid #0f1218;color:#d1d5db;vertical-align:top;}
+.rpt-table tr:last-child td{border-bottom:none;}
+.rpt-table tr:hover td{background:#0a0c10;}
+.rank-badge{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;
+  border-radius:50%;font-size:10px;font-weight:700;font-family:'JetBrains Mono',monospace;margin-right:6px;}
+.rank-1{background:#fbbf24;color:#000;}.rank-2{background:#9ca3af;color:#000;}.rank-3{background:#b45309;color:#fff;}
+.rank-other{background:#1c2030;color:#6b7280;}
+
+/* Bubble alerts */
+.alert-bubble{display:inline-flex;align-items:center;gap:6px;background:#2d0a0a;border:1px solid #7f1d1d;
+  border-radius:20px;padding:5px 12px;font-size:12px;color:#f87171;font-weight:500;margin:3px 4px 3px 0;}
+.ok-bubble{display:inline-flex;align-items:center;gap:6px;background:#052e20;border:1px solid #065f46;
+  border-radius:20px;padding:5px 12px;font-size:12px;color:#34d399;font-weight:500;margin:3px 4px 3px 0;}
+.warn-bubble{display:inline-flex;align-items:center;gap:6px;background:#1c1408;border:1px solid #92400e;
+  border-radius:20px;padding:5px 12px;font-size:12px;color:#fbbf24;font-weight:500;margin:3px 4px 3px 0;}
+
+/* Stock row */
+.stock-row{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;
+  border-radius:8px;margin-bottom:5px;background:#080a0f;border:1px solid #1c2030;}
+.stock-row.low{border-color:#7f1d1d;background:#120606;}
+.stock-bar-wrap{background:#1c2030;border-radius:4px;height:4px;width:80px;display:inline-block;margin-left:8px;vertical-align:middle;}
+.stock-bar{height:4px;border-radius:4px;}
+
+/* Profit / Loss pill */
+.profit-pill{display:inline-block;padding:2px 10px;border-radius:12px;font-size:11px;font-weight:600;font-family:'JetBrains Mono',monospace;}
+.profit-up{background:#052e20;color:#34d399;border:1px solid #065f46;}
+.profit-dn{background:#2d0a0a;color:#f87171;border:1px solid #7f1d1d;}
+
+/* Customer card */
+.cust-card{background:#080a0f;border:1px solid #1c2030;border-radius:10px;padding:12px 16px;margin-bottom:8px;}
+.cust-name{font-size:14px;font-weight:600;color:#f1f5f9;margin-bottom:3px;}
+.cust-addr{font-size:11px;color:#4b5563;margin-bottom:8px;font-family:'JetBrains Mono',monospace;}
+.cust-meta{display:flex;flex-wrap:wrap;gap:8px;}
+.meta-chip{background:#111827;border:1px solid #1f2937;border-radius:6px;padding:3px 10px;font-size:11px;color:#9ca3af;}
+
+/* Section subtitle */
+.sec-sub{font-size:11px;color:#4b5563;margin-bottom:14px;line-height:1.5;}
+
+/* Coming soon */
 .coming-soon{text-align:center;padding:50px 20px;}
 .cs-icon{font-size:48px;margin-bottom:16px;}
 .cs-title{font-size:18px;font-weight:600;color:#f1f5f9;margin-bottom:8px;}
 .cs-msg{font-size:14px;color:#4b5563;margin-bottom:12px;}
 .cs-time{font-size:13px;color:#34d399;font-family:'JetBrains Mono',monospace;}
-.tip-box{background:#0a1a12;border:1px solid #065f46;border-radius:8px;padding:12px 16px;margin-top:12px;}
-.tip-hd{font-size:10px;color:#34d399;font-family:'JetBrains Mono',monospace;letter-spacing:0.08em;margin-bottom:6px;}
+
+/* Tips */
+.tip-box{background:#0a1a12;border:1px solid #065f46;border-radius:8px;padding:12px 16px;margin-top:10px;display:flex;gap:10px;}
+.tip-num{font-size:18px;color:#34d399;line-height:1;}
 .tip-text{font-size:13px;color:#9ca3af;line-height:1.7;}
+
+/* Finance payment row */
+.pay-row{display:flex;align-items:center;justify-content:space-between;
+  padding:9px 12px;border-radius:8px;margin-bottom:5px;background:#080a0f;border:1px solid #1c2030;}
+.pending-row{border-color:#92400e;background:#100a02;}
+.pending-amount{font-size:14px;font-weight:700;color:#fbbf24;}
 ::-webkit-scrollbar{width:3px;}
 ::-webkit-scrollbar-thumb{background:#1c2030;border-radius:2px;}
 </style>
@@ -87,8 +147,19 @@ def esc(t):
     return s
 
 def call_api(msg):
+    # Build history from last 4 stored messages (2 user + 2 bot = 2 exchanges)
+    recent = st.session_state.messages[-4:] if len(st.session_state.messages) >= 4 else st.session_state.messages
+    history = []
+    for m in recent:
+        role    = "user" if m["role"] == "user" else "assistant"
+        content = m["content"]
+        if content and not m.get("is_error"):
+            history.append({"role": role, "content": content})
+
+    payload = {"message": msg, "history": history}
+
     try:
-        r = requests.post(f"{st.session_state.api_url}/chat", json={"message": msg}, timeout=60)
+        r = requests.post(f"{st.session_state.api_url}/chat", json=payload, timeout=60)
         r.raise_for_status()
         return r.json()
     except requests.exceptions.ConnectionError:
@@ -129,8 +200,6 @@ with st.sidebar:
         if st.button("📊 Report", use_container_width=True, key="nav_report"):
             st.session_state.page = "report"
             st.rerun()
-
-    
 
     if st.session_state.page == "chat":
         st.markdown("<div style='font-size:12px;font-weight:500;color:#9ca3af;margin-bottom:8px;'>Session Stats</div>", unsafe_allow_html=True)
@@ -322,11 +391,11 @@ else:
 
     # ── Shared section renderer ───────────────────────────────────────────────
     def section(title, subtitle, body_html, empty=False):
-        border = "#374151" if empty else "#065f46"
+        border = "#374151" if empty else "#1c2030"
         st.markdown(f"""
         <div class="report-card" style="border-color:{border};">
           <div class="section-hd">{title}</div>
-          <div style='font-size:11px;color:#4b5563;margin-bottom:10px;'>{subtitle}</div>
+          <div class="sec-sub">{subtitle}</div>
           <div class="report-body">{body_html}</div>
         </div>""", unsafe_allow_html=True)
 
@@ -337,10 +406,15 @@ else:
     def fmt_profit(val):
         if val is None: return "N/A"
         v = float(val)
-        label = "Munafa" if v >= 0 else "Nuqsan"
-        color  = "#34d399" if v >= 0 else "#f87171"
-        return f'<span style="color:{color};">{label}: {_fmt(abs(v))}</span>'
+        cls = "profit-up" if v >= 0 else "profit-dn"
+        label = "▲" if v >= 0 else "▼"
+        return f'<span class="profit-pill {cls}">{label} {_fmt(abs(v))}</span>'
 
+    def rank_badge(i):
+        cls = {1:"rank-1",2:"rank-2",3:"rank-3"}.get(i,"rank-other")
+        return f'<span class="rank-badge {cls}">{i}</span>'
+
+    
 
     # ── Main render function ──────────────────────────────────────────────────
     def render_report(period, build_fn):
@@ -385,130 +459,297 @@ else:
           <div class="report-sub">{data.get("date_label","")} &nbsp;·&nbsp; Generated: {data.get("generated_at","")}</div>
         </div>""", unsafe_allow_html=True)
 
-        # ── 1. Sales Summary ──────────────────────────────────────────────────
+        # ══ 1. SALES SUMMARY KPI GRID ════════════════════════════════════════
         sales = data.get("sales")
         if sales:
             s = sales
-            pf = fmt_profit(s.get("total_profit"))
-            body = (
-                f"Kul orders     : {_fmt_n(s.get('total_orders'))} transactions<br>"
-                f"Units biki     : {_fmt_n(s.get('total_qty'))}<br>"
-                f"Total wasool   : {_fmt(s.get('total_revenue'))}<br>"
-                f"Total lagat    : {_fmt(s.get('total_cost'))}<br>"
-                f"{pf}"
-            )
-        else:
-            body = "Is period mein koi sale nahi hui."
-        section("💰 Sales Summary", "Total sales, revenue aur profit", body, empty=not sales)
+            profit_val = s.get("total_profit") or 0
+            pf_cls = "kpi-green" if float(profit_val) >= 0 else "kpi-red"
+            pf_prefix = "▲" if float(profit_val) >= 0 else "▼"
+            margin = 0
+            rev = s.get("total_revenue") or 0
+            if rev:
+                margin = round((float(profit_val) / float(rev)) * 100, 1)
 
-        # ── 2. Top Products ───────────────────────────────────────────────────
+            kpi_html = f"""
+            <div class="kpi-grid">
+              <div class="kpi-card">
+                <div class="kpi-label">Total Orders</div>
+                <div class="kpi-value kpi-blue">{_fmt_n(s.get('total_orders'))}</div>
+              </div>
+              <div class="kpi-card">
+                <div class="kpi-label">Units Biki</div>
+                <div class="kpi-value kpi-purple">{_fmt_n(s.get('total_qty'))}</div>
+              </div>
+              <div class="kpi-card">
+                <div class="kpi-label">Kul Wasool</div>
+                <div class="kpi-value kpi-yellow">{_fmt(s.get('total_revenue'))}</div>
+              </div>
+              <div class="kpi-card">
+                <div class="kpi-label">Kul Lagat</div>
+                <div class="kpi-value" style="color:#9ca3af;">{_fmt(s.get('total_cost'))}</div>
+              </div>
+              <div class="kpi-card">
+                <div class="kpi-label">Net Profit</div>
+                <div class="kpi-value {pf_cls}">{pf_prefix} {_fmt(abs(float(profit_val)))}</div>
+              </div>
+              <div class="kpi-card">
+                <div class="kpi-label">Margin %</div>
+                <div class="kpi-value {'kpi-green' if margin >= 0 else 'kpi-red'}">{margin}%</div>
+              </div>
+            </div>"""
+            section("💰 Sales Summary", f"Is period ki kul sales, revenue aur net profit overview", kpi_html)
+        else:
+            section("💰 Sales Summary", "Total sales, revenue aur profit", "Is period mein koi sale nahi hui.", empty=True)
+
+        # ══ 2. TOP PRODUCTS TABLE ════════════════════════════════════════════
         prods = data.get("top_products", [])
         if prods:
-            rows = []
+            rows_html = ""
             for i, p in enumerate(prods, 1):
-                name = (p.get("_id") or "?").title()
-                rows.append(
-                    f"{i}. {name}: {_fmt_n(p.get('qty'))} units | "
-                    f"Wasool: {_fmt(p.get('revenue'))} | "
-                    f"{fmt_profit(p.get('profit'))}"
-                )
-            body = "<br>".join(rows)
+                name    = (p.get("_id") or "?").title()
+                qty     = p.get("qty") or 0
+                rev     = p.get("revenue") or 0
+                profit  = p.get("profit")
+                rows_html += f"""
+                <tr>
+                  <td style="width:30px;">{rank_badge(i)}</td>
+                  <td><span style="font-weight:600;color:#f1f5f9;">{name}</span></td>
+                  <td style="color:#a78bfa;">{_fmt_n(qty)} units</td>
+                  <td style="color:#fbbf24;">{_fmt(rev)}</td>
+                  <td>{fmt_profit(profit)}</td>
+                </tr>"""
+            body = f"""
+            <table class="rpt-table">
+              <thead><tr>
+                <th>#</th><th>Product Name</th><th>Quantity</th>
+                <th>Revenue</th><th>Profit / Loss</th>
+              </tr></thead>
+              <tbody>{rows_html}</tbody>
+            </table>"""
+            section("🏆 Top Products", "Sabse zyada bikne wale products — quantity, revenue aur profit breakdown", body)
         else:
-            body = "Koi product data nahi mila."
-        section("🏆 Top Products", "Sabse zyada bikne wale products", body, empty=not prods)
+            section("🏆 Top Products", "Sabse zyada bikne wale products", "Koi product data nahi mila.", empty=True)
 
-        # ── 3. Stock Status ───────────────────────────────────────────────────
+        # ══ 3. STOCK STATUS ══════════════════════════════════════════════════
         stock = data.get("stock", [])
         if stock:
-            rows = []
+            low_set = {i.get("product") for i in data.get("low_stock", [])}
+            rows_html = ""
             for item in stock:
-                name = (item.get("product") or "?").title()
-                qty  = max(0, item.get("qty") or 0)
-                cp   = item.get("cost_price")
-                cp_s = _fmt(cp) if cp else "price nahi"
-                low  = qty <= (item.get("low_stock_threshold") or LOW_STOCK_THRESHOLD)
-                flag = ' <span style="color:#f87171;">[LOW]</span>' if low else ""
-                rows.append(f"{name}: {_fmt_n(qty)} units | {cp_s}{flag}")
-            body = "<br>".join(rows)
+                name    = (item.get("product") or "?").title()
+                qty     = max(0, item.get("qty") or 0)
+                cp      = item.get("cost_price")
+                cp_s    = _fmt(cp) if cp else "—"
+                thr     = item.get("low_stock_threshold") or LOW_STOCK_THRESHOLD
+                is_low  = qty <= thr
+                stock_val = _fmt(float(cp) * qty) if cp and qty else "—"
+                row_cls = "stock-row low" if is_low else "stock-row"
+                # mini bar: max out at 100 units visually
+                bar_pct = min(100, int((qty / max(thr * 3, 1)) * 100))
+                bar_col = "#f87171" if is_low else "#34d399"
+                badge   = '<span class="alert-bubble">⚠ Stock Low</span>' if is_low else '<span class="ok-bubble">✓ OK</span>'
+                rows_html += f"""
+                <div class="{row_cls}">
+                  <div style="flex:1;">
+                    <span style="font-weight:600;color:#f1f5f9;">{name}</span>
+                    {badge}
+                    <div class="stock-bar-wrap"><div class="stock-bar" style="width:{bar_pct}%;background:{bar_col};"></div></div>
+                  </div>
+                  <div style="text-align:right;white-space:nowrap;margin-left:12px;">
+                    <div style="font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:700;color:{'#f87171' if is_low else '#f1f5f9'};">{_fmt_n(qty)} <span style="font-size:10px;color:#4b5563;">units</span></div>
+                    <div style="font-size:11px;color:#4b5563;">Cost: {cp_s} &nbsp;·&nbsp; Value: {stock_val}</div>
+                  </div>
+                </div>"""
+            section("📦 Stock Status", "Har product ki current inventory — qty, cost price aur estimated value", rows_html)
         else:
-            body = "Inventory khali hai."
-        section("📦 Stock Status", "Har product ki current inventory", body, empty=not stock)
+            section("📦 Stock Status", "Har product ki current inventory", "Inventory khali hai.", empty=True)
 
-        # ── 4. Low Stock Alert ────────────────────────────────────────────────
+        # ══ 4. LOW STOCK ALERTS ══════════════════════════════════════════════
         low = data.get("low_stock", [])
         if low:
-            rows = []
+            bubbles = ""
             for item in low:
                 name = (item.get("product") or "?").title()
                 qty  = max(0, item.get("qty") or 0)
                 thr  = item.get("threshold") or item.get("low_stock_threshold") or 5
-                rows.append(f'<span style="color:#f87171;">⚠ {name}: {_fmt_n(qty)} units bacha hai (threshold: {thr})</span>')
-            body = "<br>".join(rows)
+                if qty == 0:
+                    bubbles += f'<span class="alert-bubble" style="background:#3d0000;border-color:#b91c1c;">🚨 {name}: OUT OF STOCK</span>'
+                else:
+                    bubbles += f'<span class="alert-bubble">⚠ {name}: {_fmt_n(qty)} baca (min: {thr})</span>'
+            section("🚨 Low Stock Alerts", f"{len(low)} item(s) critical level par hain — foran reorder karein", bubbles)
         else:
-            body = '<span style="color:#34d399;">✓ Sab items ka stock theek hai.</span>'
-        section("⚠️ Low Stock Alert", "Jo items khatam hone wale hain", body, empty=not low)
+            section("🚨 Low Stock Alerts", "Stock alert status", '<span class="ok-bubble">✅ Sab items ka stock theek hai — koi alert nahi</span>')
 
-        # ── 5. Payments ───────────────────────────────────────────────────────
-        pays = data.get("payments")
-        if pays:
-            body = (
-                f"Payments received : {_fmt_n(pays.get('count'))}<br>"
-                f"Total amount      : {_fmt(pays.get('total'))}"
-            )
+        # ══ 5. FINANCE — PAYMENTS RECEIVED (per customer) ══════════════════
+        pays         = data.get("payments")
+        pays_detail  = data.get("payments_detail", [])
+        pending      = data.get("pending", [])
+
+        # Build per-customer payment cards
+        if pays_detail:
+            grand_total = sum(c.get("total") or 0 for c in pays_detail)
+            grand_count = sum(c.get("count") or 0 for c in pays_detail)
+            pay_body = f"""
+            <div class="pay-row" style="border-color:#065f46;background:#031a0f;margin-bottom:16px;">
+              <span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#34d399;letter-spacing:0.1em;">
+                ✓ TOTAL PAYMENTS RECEIVED &nbsp;·&nbsp; {grand_count} TRANSACTIONS
+              </span>
+              <span style="font-size:17px;font-weight:700;color:#34d399;">{_fmt(grand_total)}</span>
+            </div>"""
+            for c in pays_detail:
+                cname    = (c.get("_id") or "Unknown").title()
+                addr     = c.get("address") or "—"
+                phone    = c.get("phone") or "—"
+                total    = c.get("total") or 0
+                count    = c.get("count") or 0
+                last_pay = c.get("last_pay")
+                last_s   = last_pay.strftime("%d %b, %I:%M %p") if last_pay else "—"
+                pay_body += f"""
+            <div class="cust-card" style="border-color:#065f46;margin-bottom:8px;">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+                <div style="flex:1;">
+                  <div class="cust-name">💚 {cname}</div>
+                  <div class="cust-addr">📍 {addr} &nbsp;·&nbsp; 📞 {phone}</div>
+                  <div class="cust-meta" style="margin-top:6px;">
+                    <span class="meta-chip">🔁 {_fmt_n(count)} {'payment' if count == 1 else 'payments'}</span>
+                    <span class="meta-chip">🕐 {last_s}</span>
+                  </div>
+                </div>
+                <div style="font-size:20px;font-weight:700;color:#34d399;white-space:nowrap;margin-left:20px;padding-top:2px;">{_fmt(total)}</div>
+              </div>
+            </div>"""
+        elif pays:
+            pay_body = f"""
+            <div class="pay-row" style="border-color:#065f46;background:#031a0f;">
+              <span style="color:#9ca3af;">Total Payments Received ({_fmt_n(pays.get('count'))} transactions)</span>
+              <span style="font-size:15px;font-weight:700;color:#34d399;">{_fmt(pays.get('total'))}</span>
+            </div>"""
         else:
-            body = "Is period mein koi payment nahi aaya."
-        section("💳 Payments Received", "Customers se mili payments", body, empty=not pays)
+            pay_body = '<span style="color:#4b5563;">Is period mein koi payment nahi aaya.</span>'
 
-        # ── 6. Outstanding Balance ────────────────────────────────────────────
-        pending = data.get("pending", [])
+        section("💚 Payments Received", "Is period mein customers ne jo payments diye — naam, address aur amount", pay_body, empty=not pays_detail and not pays)
+
+        # ══ 5b. OUTSTANDING BALANCE (per customer) ═══════════════════════════
         if pending:
-            total_pending = sum(c.get("total_credit",0) or 0 for c in pending)
-            rows = [f"Kul baaki: {_fmt(total_pending)} ({len(pending)} customers)<br>"]
+            total_pending = sum(c.get("total_credit", 0) or 0 for c in pending)
+            pend_body = f"""
+            <div style="padding:8px 12px;background:#1c0a00;border:1px solid #92400e;border-radius:8px;
+              display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+              <span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#92400e;letter-spacing:0.1em;">
+                ⚠ {len(pending)} CUSTOMERS KA BAAKI HAI
+              </span>
+              <span style="font-size:15px;font-weight:700;color:#fbbf24;">{_fmt(total_pending)}</span>
+            </div>"""
             for c in pending:
-                name = (c.get("name") or "?").title()
-                rows.append(f"{name}: {_fmt(c.get('total_credit'))}")
-            body = "<br>".join(rows)
+                cname  = (c.get("name") or "?").title()
+                addr   = (c.get("address") or c.get("area") or "—")
+                phone  = (c.get("phone") or c.get("contact") or "—")
+                credit = c.get("total_credit") or 0
+                urg_col = "#f87171" if credit > 50000 else ("#fbbf24" if credit > 10000 else "#fcd34d")
+                urg_brd = "#7f1d1d" if credit > 50000 else ("#92400e" if credit > 10000 else "#78350f")
+                urg_bg  = "#1c0606" if credit > 50000 else ("#100a02" if credit > 10000 else "#0d0900")
+                pend_body += f"""
+            <div class="cust-card" style="border-color:{urg_brd};background:{urg_bg};margin-bottom:8px;">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+                <div style="flex:1;">
+                  <div class="cust-name">🔴 {cname}</div>
+                  <div class="cust-addr">📍 {addr} &nbsp;·&nbsp; 📞 {phone}</div>
+                  <div class="cust-meta" style="margin-top:6px;">
+                    <span class="meta-chip" style="border-color:{urg_brd};color:{urg_col};">⚠ Baaki: {_fmt(credit)}</span>
+                  </div>
+                </div>
+                <div style="font-size:20px;font-weight:700;color:{urg_col};white-space:nowrap;margin-left:20px;padding-top:2px;">{_fmt(credit)}</div>
+              </div>
+            </div>"""
+            section("🔴 Outstanding Balance", "Jo customers abhi tak payment nahi diye — baaki rakam", pend_body)
         else:
-            body = '<span style="color:#34d399;">✓ Sab ka hisab saaf hai, koi baaki nahi.</span>'
-        section("📋 Outstanding Balance", "Jinke payments baaki hain", body, empty=not pending)
+            section("🔴 Outstanding Balance", "Outstanding payments status", '<span class="ok-bubble">✓ Koi outstanding balance nahi — sab ka hisab saaf hai</span>')
 
-        # ── 7. Top Customers (weekly/monthly only) ────────────────────────────
+        # ══ 6. TOP CUSTOMERS TABLE (weekly/monthly) ══════════════════════════
         customers = data.get("top_customers", [])
         if customers:
-            rows = []
+            rows_html = ""
             for i, c in enumerate(customers, 1):
-                name = (c.get("_id") or "?").title()
-                rows.append(
-                    f"{i}. {name}: {_fmt(c.get('spent'))} | "
-                    f"{_fmt_n(c.get('orders'))} orders | "
-                    f"{fmt_profit(c.get('profit'))}"
-                )
-            body = "<br>".join(rows)
-            section("👥 Top Customers", "Sabse zyada kharidari karne wale", body)
+                name   = (c.get("_id") or "?").title()
+                spent  = c.get("spent") or 0
+                orders = c.get("orders") or 0
+                profit = c.get("profit")
+                # derive address/phone from pending list if available
+                cinfo  = next((x for x in pending if (x.get("name") or "").lower() == name.lower()), {})
+                addr   = (cinfo.get("address") or cinfo.get("area") or "—")
+                phone  = (cinfo.get("phone") or cinfo.get("contact") or "—")
+                rows_html += f"""
+                <tr>
+                  <td style="width:30px;">{rank_badge(i)}</td>
+                  <td>
+                    <div style="font-weight:600;color:#f1f5f9;">{name}</div>
+                    <div style="font-size:10px;color:#4b5563;margin-top:2px;">📍 {addr} &nbsp;·&nbsp; 📞 {phone}</div>
+                  </td>
+                  <td style="color:#fbbf24;">{_fmt(spent)}</td>
+                  <td style="color:#60a5fa;">{_fmt_n(orders)} orders</td>
+                  <td>{fmt_profit(profit)}</td>
+                </tr>"""
+            body = f"""
+            <table class="rpt-table">
+              <thead><tr>
+                <th>#</th><th>Customer</th><th>Total Spend</th>
+                <th>Orders</th><th>Profit Contribution</th>
+              </tr></thead>
+              <tbody>{rows_html}</tbody>
+            </table>"""
+            section("👥 Top Customers", "Sabse zyada kharidari karne wale customers — spend, orders aur profit breakdown", body)
 
-        # ── 8. Per-product profit (weekly/monthly) ────────────────────────────
+        # ══ 7. PRODUCT PROFIT / LOSS TABLE (weekly/monthly) ═════════════════
         pp = data.get("product_profit", [])
         if pp:
-            rows = []
+            rows_html = ""
             for p in pp:
-                name = (p.get("_id") or "?").title()
-                rows.append(
-                    f"{name}: {_fmt_n(p.get('qty'))} units | "
-                    f"Wasool: {_fmt(p.get('revenue'))} | "
-                    f"{fmt_profit(p.get('profit'))}"
-                )
-            body = "<br>".join(rows)
-            section("📈 Product-wise Profit/Loss", "Har item ka munafa ya nuqsan", body)
+                name   = (p.get("_id") or "?").title()
+                qty    = p.get("qty") or 0
+                rev    = p.get("revenue") or 0
+                cost   = p.get("cost") or 0
+                profit = p.get("profit") or 0
+                margin = round((profit / rev * 100), 1) if rev else 0
+                m_col  = "#34d399" if margin >= 0 else "#f87171"
+                rows_html += f"""
+                <tr>
+                  <td style="font-weight:600;color:#f1f5f9;">{name}</td>
+                  <td style="color:#a78bfa;">{_fmt_n(qty)} units</td>
+                  <td style="color:#fbbf24;">{_fmt(rev)}</td>
+                  <td style="color:#9ca3af;">{_fmt(cost)}</td>
+                  <td>{fmt_profit(profit)}</td>
+                  <td style="color:{m_col};font-family:'JetBrains Mono',monospace;">{margin}%</td>
+                </tr>"""
+            body = f"""
+            <table class="rpt-table">
+              <thead><tr>
+                <th>Product</th><th>Qty Sold</th><th>Revenue</th>
+                <th>Cost</th><th>Profit / Loss</th><th>Margin</th>
+              </tr></thead>
+              <tbody>{rows_html}</tbody>
+            </table>"""
+            section("📈 Profit & Loss — Per Product", "Har product ka munafa ya nuqsan — revenue, cost aur margin breakdown", body)
 
-        # ── 9. Stock value (monthly only) ─────────────────────────────────────
+        # ══ 8. INVENTORY VALUE (monthly only) ════════════════════════════════
         sv = data.get("stock_value")
         if sv:
-            body = (
-                f"Total products  : {_fmt_n(sv.get('total_items'))}<br>"
-                f"Total units     : {_fmt_n(sv.get('total_units'))}<br>"
-                f"Total value     : {_fmt(sv.get('total_value'))}"
-            )
-            section("🏪 Inventory Value", "Stock ki kul qeemat (cost price par)", body)
+            body = f"""
+            <div class="kpi-grid" style="grid-template-columns:repeat(3,1fr);">
+              <div class="kpi-card">
+                <div class="kpi-label">Total Products</div>
+                <div class="kpi-value kpi-blue">{_fmt_n(sv.get('total_items'))}</div>
+              </div>
+              <div class="kpi-card">
+                <div class="kpi-label">Total Units</div>
+                <div class="kpi-value kpi-purple">{_fmt_n(sv.get('total_units'))}</div>
+              </div>
+              <div class="kpi-card">
+                <div class="kpi-label">Stock Value</div>
+                <div class="kpi-value kpi-yellow">{_fmt(sv.get('total_value'))}</div>
+              </div>
+            </div>"""
+            section("🏪 Inventory Value", "Stock ki kul qeemat at cost price — warehouse value estimate", body)
 
        
 

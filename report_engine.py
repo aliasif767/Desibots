@@ -159,6 +159,35 @@ def fetch_payments(date_start, date_end=None):
     return result[0] if result else None
 
 
+def fetch_payments_by_customer(date_start, date_end=None, limit=20):
+    """Per-customer payment breakdown.
+    Reads customer, customer_address directly from finance docs — no join needed.
+    """
+    db = _get_db()
+    match = {"type": "payment", "date": {"$gte": date_start}}
+    if date_end:
+        match["date"]["$lte"] = date_end
+
+    pipeline = [
+        {"$match": match},
+        {"$group": {
+            "_id":      "$customer",
+            "total":    {"$sum": "$amount"},
+            "count":    {"$sum": 1},
+            "last_pay": {"$max": "$date"},
+            "address":  {"$last": "$customer_address"},
+            "phone":    {"$last": "$phone"},
+        }},
+        {"$addFields": {
+            "address": {"$ifNull": ["$address", "—"]},
+            "phone":   {"$ifNull": ["$phone",   "—"]},
+        }},
+        {"$sort": {"total": -1}},
+        {"$limit": limit},
+    ]
+    return list(db["finance"].aggregate(pipeline))
+
+
 def fetch_pending_credit(limit=10):
     """Customers with outstanding balance, sorted by amount."""
     db = _get_db()
@@ -235,23 +264,25 @@ def build_daily_report():
     ts   = _today_start()
     te   = _today_end()
 
-    sales   = fetch_sales_summary(ts, te)
-    prods   = fetch_top_products(ts, te, limit=5)
-    stock   = fetch_stock_status()
-    low     = fetch_low_stock()
-    pays    = fetch_payments(ts, te)
-    pending = fetch_pending_credit(limit=8)
+    sales       = fetch_sales_summary(ts, te)
+    prods       = fetch_top_products(ts, te, limit=5)
+    stock       = fetch_stock_status()
+    low         = fetch_low_stock()
+    pays        = fetch_payments(ts, te)
+    pays_detail = fetch_payments_by_customer(ts, te)
+    pending     = fetch_pending_credit(limit=8)
 
     return {
-        "period":       "daily",
-        "generated_at": now.strftime("%d %B %Y, %I:%M %p"),
-        "date_label":   now.strftime("%d %B %Y"),
-        "sales":        sales,
-        "top_products": prods,
-        "stock":        stock,
-        "low_stock":    low,
-        "payments":     pays,
-        "pending":      pending,
+        "period":           "daily",
+        "generated_at":     now.strftime("%d %B %Y, %I:%M %p"),
+        "date_label":       now.strftime("%d %B %Y"),
+        "sales":            sales,
+        "top_products":     prods,
+        "stock":            stock,
+        "low_stock":        low,
+        "payments":         pays,
+        "payments_detail":  pays_detail,
+        "pending":          pending,
     }
 
 
@@ -260,27 +291,29 @@ def build_weekly_report():
     ts   = _week_start()
     te   = _today_end()
 
-    sales     = fetch_sales_summary(ts, te)
-    prods     = fetch_top_products(ts, te, limit=5)
-    customers = fetch_top_customers(ts, te, limit=5)
-    stock     = fetch_stock_status()
-    low       = fetch_low_stock()
-    pays      = fetch_payments(ts, te)
-    pending   = fetch_pending_credit(limit=8)
-    pprofit   = fetch_product_profit(ts, te)
+    sales       = fetch_sales_summary(ts, te)
+    prods       = fetch_top_products(ts, te, limit=5)
+    customers   = fetch_top_customers(ts, te, limit=5)
+    stock       = fetch_stock_status()
+    low         = fetch_low_stock()
+    pays        = fetch_payments(ts, te)
+    pays_detail = fetch_payments_by_customer(ts, te)
+    pending     = fetch_pending_credit(limit=8)
+    pprofit     = fetch_product_profit(ts, te)
 
     return {
-        "period":        "weekly",
-        "generated_at":  now.strftime("%d %B %Y, %I:%M %p"),
-        "date_label":    f"Pichle 7 din ({ts.strftime('%d %b')} — {now.strftime('%d %b %Y')})",
-        "sales":         sales,
-        "top_products":  prods,
-        "top_customers": customers,
-        "stock":         stock,
-        "low_stock":     low,
-        "payments":      pays,
-        "pending":       pending,
-        "product_profit":pprofit,
+        "period":           "weekly",
+        "generated_at":     now.strftime("%d %B %Y, %I:%M %p"),
+        "date_label":       f"Pichle 7 din ({ts.strftime('%d %b')} — {now.strftime('%d %b %Y')})",
+        "sales":            sales,
+        "top_products":     prods,
+        "top_customers":    customers,
+        "stock":            stock,
+        "low_stock":        low,
+        "payments":         pays,
+        "payments_detail":  pays_detail,
+        "pending":          pending,
+        "product_profit":   pprofit,
     }
 
 
@@ -289,29 +322,31 @@ def build_monthly_report():
     ts   = _month_start()
     te   = _month_end()
 
-    sales     = fetch_sales_summary(ts, te)
-    prods     = fetch_top_products(ts, te, limit=5)
-    customers = fetch_top_customers(ts, te, limit=5)
-    stock     = fetch_stock_status()
-    low       = fetch_low_stock()
-    pays      = fetch_payments(ts, te)
-    pending   = fetch_pending_credit(limit=10)
-    pprofit   = fetch_product_profit(ts, te)
-    stk_val   = fetch_total_stock_value()
+    sales       = fetch_sales_summary(ts, te)
+    prods       = fetch_top_products(ts, te, limit=5)
+    customers   = fetch_top_customers(ts, te, limit=5)
+    stock       = fetch_stock_status()
+    low         = fetch_low_stock()
+    pays        = fetch_payments(ts, te)
+    pays_detail = fetch_payments_by_customer(ts, te)
+    pending     = fetch_pending_credit(limit=10)
+    pprofit     = fetch_product_profit(ts, te)
+    stk_val     = fetch_total_stock_value()
 
     return {
-        "period":         "monthly",
-        "generated_at":   now.strftime("%d %B %Y, %I:%M %p"),
-        "date_label":     now.strftime("%B %Y"),
-        "sales":          sales,
-        "top_products":   prods,
-        "top_customers":  customers,
-        "stock":          stock,
-        "low_stock":      low,
-        "payments":       pays,
-        "pending":        pending,
-        "product_profit": pprofit,
-        "stock_value":    stk_val,
+        "period":           "monthly",
+        "generated_at":     now.strftime("%d %B %Y, %I:%M %p"),
+        "date_label":       now.strftime("%B %Y"),
+        "sales":            sales,
+        "top_products":     prods,
+        "top_customers":    customers,
+        "stock":            stock,
+        "low_stock":        low,
+        "payments":         pays,
+        "payments_detail":  pays_detail,
+        "pending":          pending,
+        "product_profit":   pprofit,
+        "stock_value":      stk_val,
     }
 
 

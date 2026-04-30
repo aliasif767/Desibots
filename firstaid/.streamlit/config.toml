@@ -1,0 +1,16 @@
+[theme]
+primaryColor = "#E24B4A"
+backgroundColor = "#F5F5F3"
+secondaryBackgroundColor = "#EBEBEB"
+textColor = "#2C2C2A"
+
+[theme.sidebar]
+backgroundColor = "#1a1a1a"
+textColor = "#ffffff"
+widgetBackgroundColor = "#2C2C2A"
+widgetBorderColor = "#3a3a3a"
+skeletonBackgroundColor = "#2C2C2A"
+
+[server]
+port = 8501
+headless = true

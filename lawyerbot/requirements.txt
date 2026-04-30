@@ -1,0 +1,12 @@
+streamlit
+groq
+langchain
+langchain-community
+sentence-transformers
+faiss-cpu
+pypdf
+aiosmtplib
+python-dotenv
+pydantic-settings
+fastapi
+uvicorn

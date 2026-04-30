@@ -1,0 +1,12 @@
+fastapi
+uvicorn
+motor
+groq
+langgraph
+langchain-core
+python-dotenv
+pydantic
+edge-tts          
+python-multipart 
+streamlit
+twilio

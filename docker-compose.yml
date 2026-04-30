@@ -1,0 +1,135 @@
+version: '3.9'
+
+networks:
+  desibots-net:
+    driver: bridge
+
+volumes:
+  mongo_data:
+  backend_db:
+
+services:
+
+  # ─────────────────────────────────────────
+  # MAIN PLATFORM BACKEND (Node.js / Express)
+  # ─────────────────────────────────────────
+  main-backend:
+    build:
+      context: ./main-backend
+      dockerfile: Dockerfile
+    container_name: desibots_backend
+    ports:
+      - "8000:8000"
+    environment:
+      - PORT=8000
+      - JWT_SECRET=${JWT_SECRET:-supersecretkey_change_in_prod}
+    volumes:
+      - backend_db:/app/data
+    networks:
+      - desibots-net
+    depends_on:
+      - firstaid-bot
+      - hisabot
+      - lawbot
+      - pakorderbot
+    restart: unless-stopped
+
+  # ─────────────────────────────────────────
+  # MAIN PLATFORM FRONTEND (React / Nginx)
+  # ─────────────────────────────────────────
+  main-frontend:
+    build:
+      context: ./main-frontend
+      dockerfile: Dockerfile
+    container_name: desibots_frontend
+    ports:
+      - "3000:80"
+    networks:
+      - desibots-net
+    depends_on:
+      - main-backend
+    restart: unless-stopped
+
+  # ─────────────────────────────────────────
+  # FIRST AID BOT — MongoDB + FastAPI + Streamlit
+  # ─────────────────────────────────────────
+  firstaid-mongo:
+    image: mongo:7
+    container_name: firstaid_mongo
+    ports:
+      - "27017:27017" # Expose to host for local dev
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - desibots-net
+    restart: unless-stopped
+
+  firstaid-api:
+    build:
+      context: ./firstaid-project/backend
+      dockerfile: Dockerfile
+    container_name: firstaid_api
+    environment:
+      - MONGODB_URL=mongodb://firstaid-mongo:27017
+      - MONGODB_DB=firstaid_db
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - GROQ_MODEL=llama3-70b-8192
+    depends_on:
+      - firstaid-mongo
+    networks:
+      - desibots-net
+    restart: unless-stopped
+
+  firstaid-bot:
+    build:
+      context: ./firstaid-project
+      dockerfile: Dockerfile.streamlit
+    container_name: firstaid_streamlit
+    environment:
+      - API_URL=http://firstaid-api:8000/api/v1
+    depends_on:
+      - firstaid-api
+    networks:
+      - desibots-net
+    # NOT exposing port — only accessible through proxy
+    restart: unless-stopped
+
+  # ─────────────────────────────────────────
+  # HISAB BOT — Streamlit (Finance / Audit)
+  # ─────────────────────────────────────────
+  hisabot:
+    build:
+      context: ./hisabbot
+      dockerfile: Dockerfile
+    container_name: hisabot
+    environment:
+      - GROQ_API_KEY=${GROQ_API_KEY}
+    networks:
+      - desibots-net
+    restart: unless-stopped
+
+  # ─────────────────────────────────────────
+  # LAW BOT — Streamlit (Legal / RAG)
+  # ─────────────────────────────────────────
+  lawbot:
+    build:
+      context: ./lawerbot
+      dockerfile: Dockerfile
+    container_name: lawbot
+    networks:
+      - desibots-net
+    restart: unless-stopped
+
+  # ─────────────────────────────────────────
+  # PAK ORDER BOT — FastAPI Agent
+  # ─────────────────────────────────────────
+  pakorderbot:
+    build:
+      context: ./pakorderbot
+      dockerfile: Dockerfile
+    container_name: pakorderbot
+    environment:
+      - GROQ_API_KEY=${GROQ_API_KEY}
+    networks:
+      - desibots-net
+    restart: unless-stopped

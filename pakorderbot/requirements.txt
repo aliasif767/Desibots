@@ -1,0 +1,14 @@
+fastapi
+uvicorn[standard]
+motor
+pymongo
+langgraph
+langchain-core
+groq
+python-dotenv
+pydantic
+streamlit
+plotly
+requests
+twilio
+python-multipart

@@ -1,7 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Send, Trash2 } from 'lucide-react';
+import { ArrowLeft, Send, Trash2, Mic, Languages } from 'lucide-react';
 import { motion } from 'framer-motion';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 const API_BASE = '/api/bot/firstaid/api/v1';
 const BACKEND_BASE = '/api/bot/firstaid';
@@ -74,7 +76,7 @@ function EmergencyCard({ data }) {
           ))}
         </ul>
       ) : answer ? (
-        <div className="ai-answer">{answer}</div>
+        <div className="markdown-content ai-answer"><ReactMarkdown remarkPlugins={[remarkGfm]}>{answer}</ReactMarkdown></div>
       ) : null}
       {image && (
         <>
@@ -147,16 +149,35 @@ function ConfirmedCard({ booking, patient }) {
 // ── Main Component ──────────────────────────────────────────────
 export default function FirstAidBot({ token }) {
   const navigate = useNavigate();
-  const [messages, setMessages] = useState([]);
+
+  // ── Persistence Logic ──────────────────────────────────────────
+  const storageKey = `firstaid_bot_state_${token.slice(-10)}`;
+  
+  const getSavedState = () => {
+    try {
+      const saved = localStorage.getItem(storageKey);
+      return saved ? JSON.parse(saved) : {};
+    } catch { return {}; }
+  };
+
+  const saved = getSavedState();
+
+  const [messages, setMessages] = useState(saved.messages || []);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
-  const [bookingState, setBookingState] = useState(null);
-  const [bookingInfo, setBookingInfo] = useState({});
-  const [pendingDoctor, setPendingDoctor] = useState(null);
-  const [lastEmergency, setLastEmergency] = useState(null);
+  const [bookingState, setBookingState] = useState(saved.bookingState || null);
+  const [bookingInfo, setBookingInfo] = useState(saved.bookingInfo || {});
+  const [pendingDoctor, setPendingDoctor] = useState(saved.pendingDoctor || null);
+  const [lastEmergency, setLastEmergency] = useState(saved.lastEmergency || null);
+  
   const messagesEndRef = useRef(null);
-
   const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+
+  // Sync to localStorage
+  useEffect(() => {
+    const stateToSave = { messages, bookingState, bookingInfo, pendingDoctor, lastEmergency };
+    localStorage.setItem(storageKey, JSON.stringify(stateToSave));
+  }, [messages, bookingState, bookingInfo, pendingDoctor, lastEmergency]);
 
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
@@ -194,9 +215,47 @@ export default function FirstAidBot({ token }) {
     } catch { return null; }
   };
 
-  const handleSend = async () => {
-    const text = input.trim();
+  const [isListening, setIsListening] = useState(false);
+  const [isTransliterating, setIsTransliterating] = useState(false);
+
+  const isUrdu = (text) => /[\u0600-\u06FF]/.test(text);
+
+  const transliterate = async (text) => {
+    try {
+      const res = await fetch('/api/bot/romanize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text })
+      });
+      const d = await res.json();
+      return d.romanized || text;
+    } catch { return text; }
+  };
+
+  const startSpeech = () => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) return alert("Speech recognition not supported in this browser.");
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'en-US';
+    recognition.onstart = () => setIsListening(true);
+    recognition.onresult = (e) => {
+      const transcript = e.results[0][0].transcript;
+      setInput(transcript);
+    };
+    recognition.onend = () => setIsListening(false);
+    recognition.start();
+  };
+
+  const handleSend = async (overrideText) => {
+    let text = typeof overrideText === 'string' ? overrideText.trim() : input.trim();
     if (!text || loading) return;
+
+    if (isUrdu(text)) {
+      setIsTransliterating(true);
+      text = await transliterate(text);
+      setIsTransliterating(false);
+    }
+
     setInput('');
     addMsg('user', text);
     setLoading(true);
@@ -297,6 +356,7 @@ export default function FirstAidBot({ token }) {
   const clearChat = () => {
     setMessages([{ role: 'bot', type: 'welcome' }]);
     setBookingState(null); setBookingInfo({}); setPendingDoctor(null); setLastEmergency(null);
+    localStorage.removeItem(storageKey);
   };
 
   return (
@@ -307,7 +367,7 @@ export default function FirstAidBot({ token }) {
             <ArrowLeft size={16} /> Back
           </button>
           <div className="bot-status-dot" style={{background:'#10b981', boxShadow:'0 0 10px #10b981'}} />
-          <span style={{fontWeight:600, fontSize:'1.05rem'}}>MedAssist AI Workspace</span>
+          <span style={{fontWeight:600, fontSize:'1.05rem'}}>Sehat Bot Workspace</span>
         </div>
       </div>
 
@@ -350,7 +410,7 @@ export default function FirstAidBot({ token }) {
                     )}
                     {msg.type === 'doctor' && <DoctorCard doc={msg.doctor} />}
                     {msg.type === 'confirmed' && <ConfirmedCard booking={msg.booking} patient={msg.patient} />}
-                    {!msg.type && msg.content && <div style={{whiteSpace:'pre-wrap'}}>{msg.content}</div>}
+                    {!msg.type && msg.content && <div className="markdown-content"><ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown></div>}
                   </div>
                 </div>
               );
@@ -369,13 +429,21 @@ export default function FirstAidBot({ token }) {
           </div>
 
           <div className="chat-input-bar">
+            <button className={`btn-icon ${isListening ? 'listening' : ''}`} onClick={startSpeech} disabled={loading}>
+              <Mic size={20} color={isListening ? '#ef4444' : 'currentColor'} />
+            </button>
             <input
               value={input} onChange={e => setInput(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleSend()}
-              placeholder="Describe the emergency or ask a medical question…"
-              disabled={loading}
+              placeholder={isTransliterating ? "Romanizing Urdu..." : "Describe the emergency…"}
+              disabled={loading || isTransliterating}
             />
-            <button className="chat-send-btn" onClick={handleSend} disabled={loading || !input.trim()}>
+            {isUrdu(input) && (
+              <div className="input-indicator transliterating" style={{fontSize:'0.65rem', color:'#f87171', display:'flex', alignItems:'center', gap:'0.2rem', padding:'0 0.5rem'}}>
+                <Languages size={12} /> Romanizing...
+              </div>
+            )}
+            <button className="chat-send-btn" onClick={() => handleSend()} disabled={loading || !input.trim() || isTransliterating}>
               <Send size={16} /> Send
             </button>
           </div>

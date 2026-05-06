@@ -40,7 +40,7 @@ timeout /t 2 /nobreak >nul
 
 REM -- 5. LawBot API (FastAPI) ------------------------------------
 echo [5/6] Starting LawBot API on port 8513...
-start "Desibots - LawBot API :8513" cmd /k "cd /d %~dp0lawerbot && python -m uvicorn server:app --host 127.0.0.1 --port 8513 --reload"
+start "Desibots - LawBot API :8513" cmd /k "cd /d %~dp0lawyerbot && python -m uvicorn server:app --host 127.0.0.1 --port 8513 --reload"
 timeout /t 2 /nobreak >nul
 
 REM -- 6. Main Frontend (Vite / React) ----------------------------

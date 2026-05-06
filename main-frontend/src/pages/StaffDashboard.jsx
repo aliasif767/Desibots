@@ -11,6 +11,8 @@ import {
   MapPin, CheckCircle2, Package, Loader2, Plus, Trash2, Edit 
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 const BOT_API = '/api/bot/pakorder';
 
@@ -52,7 +54,7 @@ export default function StaffDashboard({ token }) {
         const d = await res.json();
         setData(prev => ({ ...prev, offers: d.offers || [] }));
       } else if (activeTab === 'feedback') {
-        const res = await fetch(`${BOT_API}/feedback`, { headers });
+        const res = await fetch(`${BOT_API}/staff/feedback`, { headers });
         if (res.status === 403) { setUnauthorized(true); return; }
         const d = await res.json();
         setData(prev => ({ ...prev, feedback: d.feedback || [] }));
@@ -165,7 +167,7 @@ export default function StaffDashboard({ token }) {
           <LogOut size={64} color="#f87171" style={{marginBottom:'1rem'}} />
           <h2>Access Denied</h2>
           <p>Please login as an authorized business owner or staff member to manage PakOrderBot.</p>
-          <button onClick={() => navigate('/dashboard')} className="login-submit-btn" style={{width:'100%'}}>Return to Dashboard</button>
+          <button onClick={() => navigate('/bot/pakorder')} className="login-submit-btn" style={{width:'100%'}}>Return to Customer Bot</button>
         </motion.div>
       </div>
     );
@@ -204,8 +206,8 @@ export default function StaffDashboard({ token }) {
               <button type="submit" className="login-submit-btn" disabled={authLoading}>
                 {authLoading ? <Loader2 className="animate-spin" size={20} /> : 'Unlock Dashboard'}
               </button>
-              <button type="button" onClick={() => navigate('/dashboard')} className="cancel-auth-btn">
-                Exit to Dashboard
+              <button type="button" onClick={() => navigate('/bot/pakorder')} className="cancel-auth-btn">
+                Exit to Customer Bot
               </button>
             </form>
          </motion.div>
@@ -249,9 +251,9 @@ export default function StaffDashboard({ token }) {
             <LogOut size={18} />
             <span>Lock Dashboard</span>
           </button>
-          <button onClick={() => navigate('/dashboard')} className="staff-nav-item">
+          <button onClick={() => navigate('/bot/pakorder')} className="staff-nav-item">
             <ArrowLeft size={18} />
-            <span>Back to User Portal</span>
+            <span>Back to Customer Bot</span>
           </button>
         </div>
       </div>
@@ -592,23 +594,36 @@ function HistoryTab({ history }) {
 function FeedbackTab({ feedback }) {
   return (
     <div className="feedback-list">
-      {feedback.map((f, i) => (
-        <div className="feedback-card" key={i}>
-          <div className="flex-row">
-            <strong>{f.customer_name}</strong>
-            <div className="stars">{"★".repeat(f.rating || 0)}</div>
+      {feedback.map((f, i) => {
+        const name = f.customer_name || f.name || 'Anonymous';
+        const msg = f.message || f.comment || f.text || f.feedback || '*(No text provided)*';
+        const rating = f.rating || 0;
+        const date = f.created_at ? new Date(f.created_at).toLocaleString() : '—';
+        
+        return (
+          <div className="feedback-card" key={i}>
+            <div className="flex-row">
+              <div className="fb-author">
+                <strong>{name}</strong>
+                {f.customer_phone && <span className="fb-phone"> · {f.customer_phone}</span>}
+              </div>
+              <div className="stars">{"★".repeat(rating)}{"☆".repeat(5 - rating)}</div>
+            </div>
+            <p className="fb-text">{msg}</p>
+            <div className="meta">
+              <span>{date}</span>
+              {f.order_id && <span className="fb-oid"> · Order #{f.order_id}</span>}
+            </div>
           </div>
-          <p>{f.comment}</p>
-          <div className="meta">{new Date(f.created_at).toLocaleDateString()}</div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
 
 function OffersTab({ offers, refresh, token }) {
   const [showAdd, setShowAdd] = useState(false);
-  const [newOffer, setNewOffer] = useState({ title: '', discount: '', active: true, items: '' });
+  const [newOffer, setNewOffer] = useState({ title: '', discount: '', description: '', active: true, items: '' });
 
   const handleSave = async (e) => {
     e.preventDefault();
@@ -638,9 +653,10 @@ function OffersTab({ offers, refresh, token }) {
           <div className="modal-overlay">
             <form className="staff-modal" onSubmit={handleSave}>
               <h3>Create Offer</h3>
-              <div className="form-group"><label>Title</label><input required value={newOffer.title} onChange={e => setNewOffer({...newOffer, title: e.target.value})} /></div>
-              <div className="form-group"><label>Discount Details</label><input required value={newOffer.discount} onChange={e => setNewOffer({...newOffer, discount: e.target.value})} /></div>
-              <div className="form-group"><label>Eligible Items</label><input placeholder="Comma separated" value={newOffer.items} onChange={e => setNewOffer({...newOffer, items: e.target.value})} /></div>
+               <div className="form-group"><label>Title</label><input required value={newOffer.title} onChange={e => setNewOffer({...newOffer, title: e.target.value})} /></div>
+               <div className="form-group"><label>Description</label><textarea placeholder="e.g. 2 burgers and a large drink" value={newOffer.description} onChange={e => setNewOffer({...newOffer, description: e.target.value})} style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: 'white', borderRadius: '4px', padding: '8px', width: '100%' }} /></div>
+               <div className="form-group"><label>Discount Info</label><input placeholder="e.g. 15% OFF or Rs 500" value={newOffer.discount} onChange={e => setNewOffer({...newOffer, discount: e.target.value})} /></div>
+               <div className="form-group"><label>Eligible Items</label><input placeholder="e.g. Burger, Drink" value={newOffer.items} onChange={e => setNewOffer({...newOffer, items: e.target.value})} /></div>
               <div className="modal-actions">
                 <button type="button" onClick={() => setShowAdd(false)}>Cancel</button>
                 <button type="submit" className="btn-save">Launch Offer</button>
@@ -649,18 +665,25 @@ function OffersTab({ offers, refresh, token }) {
           </div>
         )}
 
-        <div className="offers-grid">
-           {offers.map((offer, i) => (
-             <div className={`offer-card ${offer.active ? 'active' : ''}`} key={i}>
-                <h4>{offer.title}</h4>
-                <p className="discount">{offer.discount}</p>
-                {offer.items && <p className="items">Valid on: {offer.items}</p>}
-                <div className={`status-pill ${offer.active ? 'online' : 'offline'}`}>
-                  {offer.active ? 'ACTIVE' : 'INACTIVE'}
-                </div>
-             </div>
-           ))}
-        </div>
+         <div className="offers-grid">
+            {offers.map((offer, i) => (
+              <div className={`offer-card ${offer.active ? 'active' : ''}`} key={i}>
+                 <h4>{offer.title}</h4>
+                 <p className="discount">
+                   {offer.discount || (offer.discount_pct ? `${offer.discount_pct}% OFF` : (offer.deal_price ? `Rs ${offer.deal_price}` : 'Special Deal'))}
+                 </p>
+                 {offer.description && <p style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.6)', marginBottom: '0.5rem' }}>{offer.description}</p>}
+                 {offer.items && (
+                   <p className="items">
+                     Valid on: {Array.isArray(offer.items) ? offer.items.join(', ') : offer.items}
+                   </p>
+                 )}
+                 <div className={`status-pill ${offer.active ? 'online' : 'offline'}`} style={{ marginTop: 'auto' }}>
+                   {offer.active ? 'ACTIVE' : 'INACTIVE'}
+                 </div>
+              </div>
+            ))}
+         </div>
     </div>
   );
 }
@@ -694,14 +717,18 @@ function StaffChat({ token }) {
 
   return (
     <div className="staff-chat-container">
-      <div className="chat-welcome">
-        <h3>Staff AI Copilot</h3>
-        <p>Ask about analytics, menu changes, or order strategies.</p>
-      </div>
+      {messages.length === 0 && (
+        <div className="chat-welcome">
+          <h3>Staff AI Copilot</h3>
+          <p>Ask about analytics, menu changes, or order strategies.</p>
+        </div>
+      )}
       <div className="staff-chat-messages">
         {messages.map((m, i) => (
           <div key={i} className={`msg ${m.role}`}>
-             <div className="bubble">{m.content}</div>
+             <div className="bubble markdown-content">
+               <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown>
+             </div>
           </div>
         ))}
         {loading && <div className="msg bot"><div className="bubble">Thinking...</div></div>}

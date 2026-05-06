@@ -1,17 +1,38 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Send, Trash2, ChevronDown, ChevronUp, Scale } from 'lucide-react';
+import { ArrowLeft, Send, Trash2, ChevronDown, ChevronUp, Scale, Mic, Languages, Sparkles } from 'lucide-react';
 import { motion } from 'framer-motion';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 const API = '/api/bot/lawbot';
 
 export default function LawBot({ token }) {
   const navigate = useNavigate();
-  const [messages, setMessages] = useState([]);
+
+  // ── Persistence Logic ──────────────────────────────────────────
+  const storageKey = `lawbot_state_${token.slice(-10)}`;
+  
+  const getSavedState = () => {
+    try {
+      const saved = localStorage.getItem(storageKey);
+      return saved ? JSON.parse(saved) : {};
+    } catch { return {}; }
+  };
+
+  const saved = getSavedState();
+
+  const [messages, setMessages] = useState(saved.messages || []);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const messagesEndRef = useRef(null);
   const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+
+  // Sync to localStorage
+  useEffect(() => {
+    const stateToSave = { messages };
+    localStorage.setItem(storageKey, JSON.stringify(stateToSave));
+  }, [messages]);
 
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
@@ -19,9 +40,47 @@ export default function LawBot({ token }) {
     setMessages(prev => [...prev, { role, content, time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' }), ...extra }]);
   };
 
-  const handleSend = async () => {
-    const text = input.trim();
+  const [isListening, setIsListening] = useState(false);
+  const [isTransliterating, setIsTransliterating] = useState(false);
+
+  const isUrdu = (text) => /[\u0600-\u06FF]/.test(text);
+
+  const transliterate = async (text) => {
+    try {
+      const res = await fetch('/api/bot/romanize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text })
+      });
+      const d = await res.json();
+      return d.romanized || text;
+    } catch { return text; }
+  };
+
+  const startSpeech = () => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) return alert("Speech recognition not supported in this browser.");
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'en-US';
+    recognition.onstart = () => setIsListening(true);
+    recognition.onresult = (e) => {
+      const transcript = e.results[0][0].transcript;
+      setInput(transcript);
+    };
+    recognition.onend = () => setIsListening(false);
+    recognition.start();
+  };
+
+  const handleSend = async (overrideText) => {
+    let text = typeof overrideText === 'string' ? overrideText.trim() : input.trim();
     if (!text || loading) return;
+
+    if (isUrdu(text)) {
+      setIsTransliterating(true);
+      text = await transliterate(text);
+      setIsTransliterating(false);
+    }
+
     setInput('');
     addMsg('user', text);
     setLoading(true);
@@ -51,7 +110,10 @@ export default function LawBot({ token }) {
     setLoading(false);
   };
 
-  const clearChat = () => setMessages([]);
+  const clearChat = () => {
+    setMessages([]);
+    localStorage.removeItem(storageKey);
+  };
 
   // ── Sources Expandable ─────────────────────────────────────────
   function SourcesBlock({ sources }) {
@@ -81,7 +143,7 @@ export default function LawBot({ token }) {
             <ArrowLeft size={16} /> Back
           </button>
           <div className="bot-status-dot" style={{ background: '#d946ef', boxShadow: '0 0 10px #d946ef' }} />
-          <span style={{ fontWeight: 600, fontSize: '1.05rem' }}>⚖️ Legal Advisor Workspace</span>
+          <span style={{ fontWeight: 600, fontSize: '1.05rem' }}>⚖️ Lawyer Bot Workspace</span>
         </div>
       </div>
 
@@ -107,7 +169,7 @@ export default function LawBot({ token }) {
                 </div>
                 <div>
                   <div className={`msg-bubble ${msg.role === 'user' ? 'user-bubble' : msg.isError ? 'error-bubble' : 'bot-bubble'}`}>
-                    <div style={{ whiteSpace: 'pre-wrap' }}>{msg.content}</div>
+                    <div className="markdown-content"><ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown></div>
                     {msg.sources && <SourcesBlock sources={msg.sources} />}
                   </div>
                   <div className="msg-time">{msg.time}</div>
@@ -127,13 +189,21 @@ export default function LawBot({ token }) {
           </div>
 
           <div className="chat-input-bar">
+            <button className={`btn-icon ${isListening ? 'listening' : ''}`} onClick={startSpeech} disabled={loading}>
+              <Mic size={20} color={isListening ? '#ef4444' : 'currentColor'} />
+            </button>
             <input
               value={input} onChange={e => setInput(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleSend()}
-              placeholder="Ask about Pakistani Law (e.g., What is Section 144?)"
-              disabled={loading}
+              placeholder={isTransliterating ? "Romanizing Urdu..." : "Ask about Pakistani Law..."}
+              disabled={loading || isTransliterating}
             />
-            <button className="chat-send-btn" onClick={handleSend} disabled={loading || !input.trim()}>
+            {isUrdu(input) && (
+              <div className="input-indicator transliterating">
+                <Languages size={14} /> Romanizing
+              </div>
+            )}
+            <button className="chat-send-btn" onClick={() => handleSend()} disabled={loading || !input.trim() || isTransliterating}>
               <Send size={16} /> Send
             </button>
           </div>
@@ -150,15 +220,8 @@ export default function LawBot({ token }) {
           </div>
 
           <h4>Example Questions</h4>
-          {[
-            'What is Section 144?',
-            'Rights of arrested person',
-            'What is bail under PPC?',
-            'Tenant eviction law Pakistan',
-            'Property inheritance rules',
-            'What is FIR procedure?',
-          ].map(q => (
-            <button key={q} className="quick-btn" onClick={() => setInput(q)}>{q}</button>
+          {['What is Section 144?', 'Rights of arrested person', 'What is bail under PPC?', 'Tenant eviction law Pakistan', 'Property inheritance rules', 'What is FIR procedure?'].map(q => (
+            <button key={q} className="quick-btn" onClick={() => handleSend(q)}>{q}</button>
           ))}
           <hr style={{ border: 'none', borderTop: '1px solid var(--card-border)', margin: '0.5rem 0' }} />
           <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', lineHeight: 1.7 }}>

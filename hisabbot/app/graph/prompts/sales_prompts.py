@@ -50,7 +50,7 @@ REQUIRED OUTPUT FORMAT:
       "collection": "customers",
       "filter": <see CUSTOMER FILTER RULES below>,
       "update": {{
-        "$inc": {{"total_credit": <sum of all sale_totals>}},
+        "$inc": {{"total_credit": <calculated single number sum of all sale_totals>}},
         "$set": {{"last_seen": "__TODAY_START__"}},
         "$setOnInsert": {{"name": "<customer>", "phone": <phone or null>, "address": <address or null>, "join_date": "__TODAY_START__"}}
       }},
@@ -74,6 +74,7 @@ SALES DOCUMENT — also store customer_address:
 
 For MULTIPLE products to the SAME customer: one inventory+sales step per product,
 ONE final customer update with the SUM of all sale_totals.
+DO NOT use math expressions (e.g. 100+200) in the JSON; provide the final calculated number.
 collection values must always be exactly: "inventory", "sales", or "customers"
 """
 

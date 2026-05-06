@@ -18,6 +18,7 @@ Default bot is HisabBot.
 import os
 import httpx
 import logging
+import re
 from datetime import datetime
 from fastapi import APIRouter, Request, Response
 from twilio.twiml.messaging_response import MessagingResponse
@@ -102,16 +103,64 @@ def _switched_text(bot_key: str) -> str:
 
 # ── Bot-specific HTTP callers ─────────────────────────────────────────────────
 
+def _format_final_response(bot_key: str, text: str) -> str:
+    """
+    Apply professional WhatsApp formatting (Markdown + Emojis)
+    to bot responses.
+    """
+    info = BOT_REGISTRY.get(bot_key, {"name": bot_key.title()})
+    bot_name = info["name"]
+    
+    # If the text already looks formatted (multiple lines with emojis at start), 
+    # we just add the footer.
+    if text.strip().startswith(("🚨", "🏥", "⚠️", "ℹ️", "✅")):
+        footer = "\n\n" + "═" * 15 + "\n" + "_Type /help to switch bots_"
+        return text.strip() + footer
+
+    # 1. Standard Header
+    header = f"*{bot_name}*\n" + "═" * 15 + "\n\n"
+    
+    # 2. Body Formatting
+    clean_text = text.strip()
+    
+    # Remove any existing bot name prefix
+    if clean_text.lower().startswith(bot_key.lower()):
+        clean_text = clean_text[len(bot_key):].lstrip(": ").strip()
+        
+    # Standardize bullet points
+    clean_text = clean_text.replace("- ", "• ").replace("* ", "• ")
+    
+    # Ensure important labels are bold
+    labels = [
+        "Total", "Amount", "Status", "Date", "Name", "Specialty", 
+        "Location", "Price", "Order ID", "Address", "Items", 
+        "Consultation", "Section", "Article", "Note", "Warning",
+        "Required", "Recommendation"
+    ]
+    for label in labels:
+        # Matches "Label:" or "Label :" (case-insensitive)
+        clean_text = re.sub(rf'(?i)\b({label})\s*:', r'*\1:*', clean_text)
+
+    # 3. Standard Footer
+    footer = "\n\n" + "═" * 15 + "\n" + "_Type /help to switch bots_"
+    
+    return header + clean_text + footer
+
+
 async def _call_hisabbot(url: str, message: str, history: list) -> str:
     """POST /chat  →  { reply }"""
     async with httpx.AsyncClient(timeout=30) as client_http:
-        r = await client_http.post(f"{url}/chat", json={
-            "message": message,
-            "history": history,
-        })
-        r.raise_for_status()
-        data = r.json()
-        return data.get("reply", "HisabBot se jawab nahi mila.")
+        try:
+            r = await client_http.post(f"{url}/chat", json={
+                "message": message,
+                "history": history,
+            })
+            r.raise_for_status()
+            data = r.json()
+            return data.get("reply", "HisabBot se jawab nahi mila.")
+        except Exception as e:
+            logger.error(f"HisabBot Error: {e}")
+            return "⚠️ HisabBot is currently unavailable."
 
 async def _call_sehatbot(url: str, message: str, history: list) -> str:
     """POST /api/v1/chat  →  { intent, response_type, data: { FirstAidResponse } }"""
@@ -224,7 +273,13 @@ async def _call_pakorderbot(url: str, message: str, history: list) -> str:
         })
         r.raise_for_status()
         data = r.json()
-        return data.get("reply", "PakOrderBot se jawab nahi mila.")
+        
+        # Extract reply from common keys
+        for key in ("reply", "response", "answer", "message"):
+            if data.get(key):
+                return str(data[key])
+                
+        return "PakOrderBot se jawab mila lekin format samajh nahi aya."
 
 
 async def _call_lawyerbot(url: str, message: str, history: list) -> str:
@@ -238,7 +293,13 @@ async def _call_lawyerbot(url: str, message: str, history: list) -> str:
         })
         r.raise_for_status()
         data = r.json()
-        return data.get("response", "LawyerBot se jawab nahi mila.")
+        
+        # Extract response from common keys
+        for key in ("response", "reply", "answer", "message"):
+            if data.get(key):
+                return str(data[key])
+                
+        return "LawyerBot se jawab mila lekin format samajh nahi aya."
 
 
 BOT_CALLERS = {
@@ -261,31 +322,55 @@ async def dispatch(phone: str, message: str) -> str:
 
     # ── Command handling ─────────────────────────────────────────────────
     if text.startswith("/"):
-        cmd = text[1:].lower().split()[0]  # e.g. "/hisabbot hello" → "hisabbot"
+        # Extract command and remove punctuation/trailing text
+        raw_cmd = text[1:].lower().split()[0].rstrip(".:,;!?")
+        
+        # Define aliases
+        aliases = {
+            "sehat":       "sehatbot",
+            "sehatbot":    "sehatbot",
+            "firstaid":    "sehatbot",
+            "pakorder":    "pakorderbot",
+            "pakorderbot": "pakorderbot",
+            "food":        "pakorderbot",
+            "lawyer":      "lawyerbot",
+            "lawyerbot":   "lawyerbot",
+            "lawbot":      "lawyerbot",
+            "hisab":       "hisabbot",
+            "hisabbot":    "hisabbot",
+            "finance":     "hisabbot",
+        }
+        
+        cmd = aliases.get(raw_cmd)
 
-        if cmd == "help":
+        if raw_cmd == "help":
             return _help_text()
 
-        if cmd == "status":
+        if raw_cmd == "status":
             return _status_text(session["active_bot"])
 
-        if cmd in BOT_REGISTRY:
+        if cmd and cmd in BOT_REGISTRY:
             session["active_bot"] = cmd
             session["history"]    = []  # reset history on bot switch
             await save_session(session)
+            logger.info(f"[Dispatcher] Switched {phone} to {cmd}")
             return _switched_text(cmd)
 
         # Unknown command — show help
         return (
-            f"❓ Unknown command: /{cmd}\n\n"
+            f"❓ Unknown command: /{raw_cmd}\n\n"
             + _help_text()
         )
 
     # ── Forward to active bot ─────────────────────────────────────────────
-    active   = session["active_bot"]
+    active   = session.get("active_bot", DEFAULT_BOT)
+    if active not in BOT_REGISTRY: active = DEFAULT_BOT
+    
     bot_info = BOT_REGISTRY[active]
-    caller   = BOT_CALLERS[active]
-    history  = session["history"]
+    caller   = BOT_CALLERS.get(active, _call_hisabbot)
+    history  = session.get("history", [])
+
+    logger.info(f"[Dispatcher] Forwarding to {active} for {phone}: {text[:50]}")
 
     try:
         reply = await caller(bot_info["url"], text, history)
@@ -300,15 +385,18 @@ async def dispatch(phone: str, message: str) -> str:
         logger.error(f"Error calling {active}: {e}")
         reply = f"❌ Error: {bot_info['name']} encountered a problem. Try again."
 
+    # 4. Final Professional Formatting
+    formatted_reply = _format_final_response(active, reply)
+
     # Update history
     history.append({"role": "user",      "content": text})
-    history.append({"role": "assistant", "content": reply})
+    history.append({"role": "assistant", "content": reply}) # Store raw reply in history
     if len(history) > 20:
         history = history[-20:]
     session["history"] = history
     await save_session(session)
 
-    return reply
+    return formatted_reply
 
 
 # ── FastAPI route ─────────────────────────────────────────────────────────────

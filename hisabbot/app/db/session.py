@@ -13,4 +13,5 @@ tenant_var = contextvars.ContextVar("tenant", default="default")
 
 def get_db():
     tenant_id = tenant_var.get()
-    return client[f"hisabbot_{tenant_id}"]
+    safe_tenant = str(tenant_id).replace(".", "_").replace("@", "_").replace(" ", "_")
+    return client[f"hisabbot_{safe_tenant}"]

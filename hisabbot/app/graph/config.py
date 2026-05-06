@@ -42,7 +42,7 @@ class _LazyGroqClient:
 
 groq_client = _LazyGroqClient()
 
-JSON_RULE = "Return ONLY a valid json object. No markdown. No explanation."
+JSON_RULE = "Return ONLY a valid json object. No markdown. No explanation. IMPORTANT: Do NOT include arithmetic expressions (like 1+1) in any numeric fields; calculate the final value yourself."
 
 DATE_RULES = """
 === DATE PLACEHOLDERS (Python resolves at runtime) ===

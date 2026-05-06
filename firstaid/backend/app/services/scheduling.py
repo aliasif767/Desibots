@@ -149,9 +149,17 @@ async def get_available_doctors(emergency_type: str, tenant_id: str = "default",
 
     # 1. If search_query provided, search by name or specialty
     if search_query and search_query.strip():
+        sq_low = search_query.lower()
+        # Check if user wants to see ALL doctors (English or Roman Urdu)
+        if any(w in sq_low for w in ["all", "sary", "sab", "list", "show", "dekha", "available", "availability", "doctors"]):
+            docs = await db.doctors.find({"status": "active"}, {"_id": 0}).to_list(50)
+            if not docs:
+                docs = await shared_db.doctors.find({"status": "active"}, {"_id": 0}).to_list(50)
+            return docs
+
         # Remove common stop words from query to improve regex matching
         clean_query = re.sub(r'(?i)\b(book|appointment|with|for|a|an|the|dr\.?|k|sat|karna|hai|me|my)\b', '', search_query).strip()
-        words = [w for w in clean_query.split() if len(w) > 2]
+        words = [w for w in clean_query.split() if len(w) >= 2] # Changed to >= 2
         
         if words:
             # Join words with OR operator for regex
@@ -159,16 +167,17 @@ async def get_available_doctors(emergency_type: str, tenant_id: str = "default",
             search_filter = {
                 "$or": [
                     {"doctor_name": {"$regex": regex_pattern, "$options": "i"}},
-                    {"specialty": {"$regex": regex_pattern, "$options": "i"}}
+                    {"specialty": {"$regex": regex_pattern, "$options": "i"}},
+                    {"location": {"$regex": regex_pattern, "$options": "i"}}
                 ],
                 "status": "active"
             }
             # Check tenant DB
-            docs = await db.doctors.find(search_filter, {"_id": 0}).to_list(10)
+            docs = await db.doctors.find(search_filter, {"_id": 0}).to_list(50)
             
             # Fallback to shared DB for search query
             if not docs:
-                docs = await shared_db.doctors.find(search_filter, {"_id": 0}).to_list(10)
+                docs = await shared_db.doctors.find(search_filter, {"_id": 0}).to_list(50)
                 
             if docs:
                 return docs
@@ -181,7 +190,7 @@ async def get_available_doctors(emergency_type: str, tenant_id: str = "default",
     docs = await db.doctors.find(
         {"specialty_keys": et, "status": "active"},
         {"_id": 0}
-    ).to_list(10)
+    ).to_list(50)
 
     # Fallback to default pool in tenant DB
     if not docs:
@@ -195,14 +204,14 @@ async def get_available_doctors(emergency_type: str, tenant_id: str = "default",
                 "status": "active"
             },
             {"_id": 0}
-        ).to_list(10)
+        ).to_list(50)
 
     # Fallback to shared DB if tenant DB has no matches
     if not docs:
         docs = await shared_db.doctors.find(
             {"specialty_keys": et, "status": "active"},
             {"_id": 0}
-        ).to_list(10)
+        ).to_list(50)
 
     if not docs:
         docs = await shared_db.doctors.find(
@@ -215,7 +224,7 @@ async def get_available_doctors(emergency_type: str, tenant_id: str = "default",
                 "status": "active"
             },
             {"_id": 0}
-        ).to_list(10)
+        ).to_list(50)
 
     return docs
 

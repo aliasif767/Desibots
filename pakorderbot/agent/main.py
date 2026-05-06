@@ -164,24 +164,12 @@ async def chat(request: ChatIn, role: str = Depends(_get_role)):
         "intent":      result.get("extracted_intent", {}),
         "conv_stage":  result.get("conv_stage",  ""),
         "order_draft": result.get("order_draft", {}),
+        "res_type":    result.get("res_type"),
+        "res_data":    result.get("res_data"),
     }
 
 
-@app.post("/staff/chat")
-async def staff_chat(request: ChatIn, payload: dict = Depends(_require_staff)):
-    history = [{"role":h.role,"content":h.content} for h in (request.history or [])]
-    result = await pakorderbot_agent.ainvoke({
-        "user_message":         request.message,
-        "conversation_history": history,
-        "user_role":            "staff",
-        "conv_stage":           "",
-        "order_draft":          {},
-    })
-    return {
-        "reply":    result["final_response"],
-        "intent":   result.get("extracted_intent",{}),
-        "operator": payload.get("sub"),
-    }
+
 
 
 @app.get("/health")
@@ -251,6 +239,14 @@ async def update_order_status(order_id: str, data: dict, payload: dict = Depends
     except:
         print(f"DEBUG: Order {order_id} status updated to {new_status} (Tenant: unknown)")
     return {"message": f"Order {order_id} pushed to {new_status}"}
+
+@app.get("/staff/feedback")
+async def get_all_feedback(payload: dict = Depends(_require_staff)):
+    """Fetch all feedback for the dashboard."""
+    from agent.graph.db_executor import _get_db
+    db = _get_db()
+    docs = await db["feedback"].find({}, {"_id": 0}).sort("created_at", -1).limit(200).to_list(200)
+    return {"feedback": docs}
 
 @app.get("/staff/orders/history")
 async def get_order_history(search: Optional[str] = None, status: Optional[str] = None, payload: dict = Depends(_require_staff)):
@@ -387,34 +383,25 @@ async def get_category_stats(payload: dict = Depends(_require_staff)):
     return {"data": [{"category": d["_id"] or "Other", "revenue": d["revenue"], "count": d["count"]} for d in docs]}
 
 @app.post("/staff/chat")
-async def staff_ai_chat(data: dict, payload: dict = Depends(_require_staff)):
-    """A dedicated AI for staff to ask about orders, management, and tips."""
-    import os
-    from groq import Groq
-    
-    client = Groq(api_key=os.getenv("GROQ_API_KEY"))
-    user_msg = data.get("message", "")
-    history  = data.get("history", [])
-    
-    # Simple management context
-    sys_prompt = f"""
-    Aap PakOrderBot ke Kitchen/Staff Assistant hain.
-    Staff aap se orders, menu aur management ke sawal karega.
-    Handle: {payload.get('sub')} (Username) aur role: {payload.get('role')}
-    Jawab Roman Urdu aur English ka mix hona chahiye.
-    Store operations aur customer satisfaction pe focus karein.
-    """
-    
-    msgs = [{"role": "system", "content": sys_prompt}]
-    for m in history: msgs.append(m)
-    msgs.append({"role": "user", "content": user_msg})
-    
-    chat_completion = client.chat.completions.create(
-        messages=msgs,
-        model="llama-3.3-70b-versatile",
-        temperature=0.7,
-    )
-    return {"reply": chat_completion.choices[0].message.content}
+async def staff_chat(data: dict, payload: dict = Depends(_require_staff)):
+    history_in = data.get("history", [])
+    history = []
+    for h in history_in:
+        r = "assistant" if h.get("role") == "bot" else h.get("role", "user")
+        history.append({"role": r, "content": h.get("content", "")})
+        
+    result = await pakorderbot_agent.ainvoke({
+        "user_message":         data.get("message", ""),
+        "conversation_history": history,
+        "user_role":            "staff",
+        "conv_stage":           "",
+        "order_draft":          {},
+    })
+    return {
+        "reply":    result["final_response"],
+        "intent":   result.get("extracted_intent",{}),
+        "operator": payload.get("sub"),
+    }
 
 # ── AUTOMATION WORKER ───────────────────────────────────────────────────────
 

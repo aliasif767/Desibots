@@ -7,6 +7,8 @@ import {
   Activity, Stethoscope, Filter
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 const BOT_API = '/api/bot/firstaid';
 
@@ -463,7 +465,11 @@ function StaffChat({ token }) {
       )}
       <div className="staff-chat-messages">
         {messages.map((m, i) => (
-          <div key={i} className={`msg ${m.role}`}><div className="bubble" style={{ whiteSpace: 'pre-wrap' }}>{m.content}</div></div>
+          <div key={i} className={`msg ${m.role}`}>
+            <div className="bubble markdown-content">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown>
+            </div>
+          </div>
         ))}
         {loading && <div className="msg bot"><div className="bubble">Thinking...</div></div>}
         <div ref={endRef} />

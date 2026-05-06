@@ -10,7 +10,8 @@ function Sidebar({ collapsed, setCollapsed, username, isSubscribed, role, handle
 
   if (role === 'admin') {
     navItems = [
-      { name: 'Admin Dashboard', path: '/admin', icon: <Users size={20} /> }
+      { name: 'Admin Dashboard', path: '/admin', icon: <LayoutDashboard size={20} /> },
+      { name: 'User Controller', path: '/admin/users', icon: <Users size={20} /> }
     ];
   } else {
     navItems = [
@@ -29,7 +30,7 @@ function Sidebar({ collapsed, setCollapsed, username, isSubscribed, role, handle
     >
       <div
         className="sidebar-brand"
-        onClick={() => navigate('/dashboard')}
+        onClick={() => navigate(role === 'admin' ? '/admin' : '/dashboard')}
       >
         <div className="sidebar-brand-icon">D</div>
         {!collapsed && <span className="sidebar-brand-text">Desibots</span>}

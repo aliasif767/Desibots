@@ -20,7 +20,8 @@ def _get_db():
     if _client is None:
         _client = motor.motor_asyncio.AsyncIOMotorClient(MONGO_URI)
     tenant_id = tenant_var.get()
-    return _client[f"{DB_NAME}_{tenant_id}"]
+    safe_tenant = str(tenant_id).replace(".", "_").replace("@", "_").replace(" ", "_")
+    return _client[f"{DB_NAME}_{safe_tenant}"]
 
 ALLOWED_COLLECTIONS = {"menu", "orders", "customers", "analytics", "offers", "staff", "feedback"}
 ALWAYS_BLOCKED      = {"$where", "$function", "deleteMany", "drop", "insertMany"}

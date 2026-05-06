@@ -13,6 +13,18 @@ from .config import groq_client, MODEL
 from .prompts.responder_prompt import RESPONDER_PROMPT
 
 
+def _is_english(text: str) -> bool:
+    """Simple heuristic to detect if text is English."""
+    common_en = {
+        "the", "is", "show", "me", "all", "today", "profit", "give", "price", "to", 
+        "stock", "check", "pay", "paid", "payment", "sell", "sold", "sale", "add", 
+        "record", "list", "report", "balance", "history", "what", "how", "many", 
+        "much", "who", "where", "when", "for", "from"
+    }
+    words = set(text.lower().split())
+    return any(w in common_en for w in words)
+
+
 # ── Empty-result message map (action keyword → helpful Roman Urdu message) ───
 EMPTY_MESSAGES = {
     "check stock": (
@@ -108,16 +120,43 @@ def _empty_message(action: str, user_msg: str) -> str:
     """Return the best empty-result message for a given action/user message."""
     action_l  = action.lower()
     user_msg_l = user_msg.lower()
-    for key, val in EMPTY_MESSAGES.items():
-        if key in action_l or key in user_msg_l:
-            return val
-    return (
-        "Is query ke liye koi record nahi mila database mein.\n"
-        "Pehle data enter karen, phir dobara check karen."
-    )
+    en = _is_english(user_msg)
+
+    # Dictionary for Roman Urdu messages
+    UR_MSGS = {
+        "stock": "Abhi inventory mein koi item record nahi hai.\nStock add karne ke liye likhen, e.g.:\n  '200 bags cheeni price 5000 add karo'",
+        "sales": "Aaj abhi tak koi sale record nahi ki gayi.\nSales record honi shuru hongi to yahan dikhen gi.",
+        "customer": "Is naam ka koi customer database mein nahi mila.\nNaya customer add karne ke liye unka naam aur number den.",
+        "finance": "Is customer ka koi payment record nahi mila.\nPayment record karne ke liye likhen, e.g.:\n  'ali ne 5000 rupay diye'",
+        "bill": "Is customer ka koi purchase record nahi mila.\nPehle sales record karen, phir bill check karen.",
+        "profit": "Abhi tak koi sale record nahi, isliye profit bhi nahi.",
+        "default": "Is query ke liye koi record nahi mila database mein.\nPehle data enter karen, phir dobara check karen."
+    }
+
+    # Dictionary for English messages
+    EN_MSGS = {
+        "stock": "No items found in inventory.\nTo add stock, type e.g.:\n  'add 200 sugar price 5000 to stock'",
+        "sales": "No sales recorded for today yet.\nSales will appear here once recorded.",
+        "customer": "No customer found with this name.\nTo add a customer, provide their name and details.",
+        "finance": "No payment records found for this customer.\nTo record a payment, type e.g.:\n  'ali paid 5000'",
+        "bill": "No purchase records found for this customer.\nPlease record some sales first.",
+        "profit": "No sales recorded yet, so no profit to show.",
+        "default": "No records found for this query.\nPlease enter some data first."
+    }
+
+    msgs = EN_MSGS if en else UR_MSGS
+    
+    if any(w in action_l or w in user_msg_l for w in ["stock", "inventory"]): return msgs["stock"]
+    if any(w in action_l or w in user_msg_l for w in ["sale", "bika"]): return msgs["sales"]
+    if any(w in action_l or w in user_msg_l for w in ["customer", "balance"]): return msgs["customer"]
+    if any(w in action_l or w in user_msg_l for w in ["payment", "finance"]): return msgs["finance"]
+    if any(w in action_l or w in user_msg_l for w in ["bill", "invoice", "hisab"]): return msgs["bill"]
+    if any(w in action_l or w in user_msg_l for w in ["profit", "munafa"]): return msgs["profit"]
+    
+    return msgs["default"]
 
 
-def _format_payment_ok(db_result: str) -> str:
+def _format_payment_ok(db_result: str, user_msg: str) -> str:
     """Parse PAYMENT_OK:... string and return a formatted confirmation."""
     params = {}
     for part in db_result.replace("PAYMENT_OK:", "").split(","):
@@ -129,6 +168,7 @@ def _format_payment_ok(db_result: str) -> str:
     address   = params.get("address", "").strip()
     amount    = params.get("amount", "?")
     remaining = params.get("remaining", "0")
+    en = _is_english(user_msg)
 
     try:
         amt_fmt = f"Rs {float(amount):,.0f}"
@@ -137,59 +177,106 @@ def _format_payment_ok(db_result: str) -> str:
     except Exception:
         amt_fmt = f"Rs {amount}"
         rem_fmt = f"Rs {remaining}"
-        rem_val = 1  # assume nonzero if parse fails
+        rem_val = 1
 
     addr_part = f" ({address})" if address else ""
-    rem_line  = "Ab koi baaki nahi." if rem_val <= 0 else f"Remaining baaki: {rem_fmt}"
-    return f"{customer}{addr_part} se {amt_fmt} payment mil gayi.\n{rem_line}"
+    if en:
+        rem_line = "No balance remaining." if rem_val <= 0 else f"Remaining balance: {rem_fmt}"
+        return f"Payment of {amt_fmt} received from {customer}{addr_part}.\n{rem_line}"
+    else:
+        rem_line = "Ab koi baaki nahi." if rem_val <= 0 else f"Remaining baaki: {rem_fmt}"
+        return f"{customer}{addr_part} se {amt_fmt} payment mil gayi.\n{rem_line}"
 
 
-def _format_stock_error(db_result: str) -> str:
-    """Parse STOCK_ERROR:... string and return clean Roman Urdu lines."""
+def _format_stock_error(db_result: str, user_msg: str) -> str:
+    """Parse STOCK_ERROR:... string and return clean lines."""
     errors = db_result.replace("STOCK_ERROR:", "").strip().split(" | ")
-    lines  = ["Sale nahi ho saki — stock kam hai:"]
-    for err in errors:
-        lines.append(f"  {err.replace('ERROR:', '').strip()}")
-    lines.append("Pehle stock bharein, phir sale record karein.")
+    en = _is_english(user_msg)
+    
+    if en:
+        lines = ["Could not record sale — low stock:"]
+        for err in errors:
+            e = err.replace('ERROR:', '').strip()
+            e = e.replace('ka stock kam hai', 'stock is low').replace('Maujood', 'Available').replace('Maanga gaya', 'Requested').replace('Kum', 'Short')
+            lines.append(f"  {e}")
+        lines.append("Please restock before recording this sale.")
+    else:
+        lines = ["Sale nahi ho saki — stock kam hai:"]
+        for err in errors:
+            lines.append(f"  {err.replace('ERROR:', '').strip()}")
+        lines.append("Pehle stock bharein, phir sale record karein.")
     return "\n".join(lines)
 
 
-def _format_customer_ambiguous(db_result: str) -> str:
+def _format_customer_ambiguous(db_result: str, user_msg: str) -> str:
     """Parse CUSTOMER_AMBIGUOUS:... string and return a clarification prompt."""
     rest         = db_result.replace("CUSTOMER_AMBIGUOUS:", "")
     pipe         = rest.find("|")
     name         = rest[:pipe] if pipe != -1 else rest
     options_text = rest[pipe + 1:] if pipe != -1 else ""
-    return (
-        f"'{name}' naam ke multiple customers hain.\n"
-        f"Kaunsa wala matlab hai?\n\n"
-        f"{options_text}\n\n"
-        f"Address ya phone number ke saath batain, e.g.:\n"
-        f"  '{name.lower()} lahore wala ko sale karo'"
-    )
+    en = _is_english(user_msg)
+    
+    if en:
+        return (
+            f"Multiple customers found with the name '{name}'.\n"
+            f"Which one did you mean?\n\n"
+            f"{options_text}\n\n"
+            f"Please clarify with address or phone, e.g.:\n"
+            f"  'sell to {name.lower()} from lahore'"
+        )
+    else:
+        return (
+            f"'{name}' naam ke multiple customers hain.\n"
+            f"Kaunsa wala matlab hai?\n\n"
+            f"{options_text}\n\n"
+            f"Address ya phone number ke saath batain, e.g.:\n"
+            f"  '{name.lower()} lahore wala ko sale karo'"
+        )
 
 
-def _format_missing_price(db_result: str, is_cost: bool) -> str:
+def _format_missing_price(db_result: str, user_msg: str, is_cost: bool) -> str:
     """Format MISSING_PRICE / MISSING_COST_PRICE responses."""
     prefix    = "MISSING_COST_PRICE:" if is_cost else "MISSING_PRICE:"
-    price_lbl = "cost price (khareed qeemat)" if is_cost else "selling price"
+    en = _is_english(user_msg)
+    
+    if en:
+        price_lbl = "cost price" if is_cost else "selling price"
+    else:
+        price_lbl = "cost price (khareed qeemat)" if is_cost else "selling price"
+        
     products  = db_result.replace(prefix, "").strip()
     prod_list = [p.strip() for p in products.split(",") if p.strip()]
 
     if len(prod_list) == 1:
         p = prod_list[0]
-        return (
-            f"{p} ki {price_lbl} nahi di.\n"
-            f"Aglay message mein price batain, e.g.:\n"
-            f"  '{p.lower()} price {'5000' if is_cost else '3000'}'"
-        )
+        if en:
+            return (
+                f"Missing {price_lbl} for {p}.\n"
+                f"Please provide the price, e.g.:\n"
+                f"  '{p.lower()} price {'5000' if is_cost else '3000'}'"
+            )
+        else:
+            return (
+                f"{p} ki {price_lbl} nahi di.\n"
+                f"Aglay message mein price batain, e.g.:\n"
+                f"  '{p.lower()} price {'5000' if is_cost else '3000'}'"
+            )
+            
     items_str = "\n".join(f"  - {p}" for p in prod_list)
-    examples  = ", ".join(f"{p.lower()} price XXXX" for p in prod_list)
-    return (
-        f"In items ki {price_lbl} nahi di:\n{items_str}\n\n"
-        f"Aglay message mein prices batain, e.g.:\n"
-        f"  '{examples}'"
-    )
+    if en:
+        examples  = ", ".join(f"{p.lower()} price XXXX" for p in prod_list)
+        return (
+            f"The following items are missing {price_lbl}:\n{items_str}\n\n"
+            f"Please provide prices in the next message, e.g.:\n"
+            f"  '{examples}'"
+        )
+    else:
+        examples  = ", ".join(f"{p.lower()} price XXXX" for p in prod_list)
+        return (
+            f"In items ki {price_lbl} nahi di:\n{items_str}\n\n"
+            f"Aglay message mein prices batain, e.g.:\n"
+            f"  '{examples}'"
+        )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -221,7 +308,7 @@ async def responder_node(state: dict) -> dict:
             messages=[
                 {"role": "system", "content": (
                     "You are HisabBot. The user is asking about the recent conversation. "
-                    "Answer in Roman Urdu (Urdu words in English letters). "
+                    "Answer in the same language as the user (English or Roman Urdu). "
                     "Be concise and direct. Only refer to what is in the conversation history provided."
                 )},
                 {"role": "user", "content": (
@@ -254,19 +341,19 @@ async def responder_node(state: dict) -> dict:
         return {"final_response": _empty_message(action, user_msg)}
 
     if db_result.startswith("CUSTOMER_AMBIGUOUS:"):
-        return {"final_response": _format_customer_ambiguous(db_result)}
+        return {"final_response": _format_customer_ambiguous(db_result, user_msg)}
 
     if db_result.startswith("MISSING_COST_PRICE:"):
-        return {"final_response": _format_missing_price(db_result, is_cost=True)}
+        return {"final_response": _format_missing_price(db_result, user_msg, is_cost=True)}
 
     if db_result.startswith("MISSING_PRICE:"):
-        return {"final_response": _format_missing_price(db_result, is_cost=False)}
+        return {"final_response": _format_missing_price(db_result, user_msg, is_cost=False)}
 
     if db_result.startswith("PAYMENT_OK:"):
-        return {"final_response": _format_payment_ok(db_result)}
+        return {"final_response": _format_payment_ok(db_result, user_msg)}
 
     if db_result.startswith("STOCK_ERROR:"):
-        return {"final_response": _format_stock_error(db_result)}
+        return {"final_response": _format_stock_error(db_result, user_msg)}
 
     # ── Structured data → LLM formatter ─────────────────────────────────────
     try:
@@ -283,7 +370,7 @@ async def responder_node(state: dict) -> dict:
                 f"=== DATABASE RESULT (ONLY use data from here) ===\n"
                 f"{formatted}\n"
                 f"=== END OF DATABASE RESULT ===\n\n"
-                f"Format this data in Roman Urdu. "
+                f"Format this data in the same language as the user (English or Roman Urdu). "
                 f"Do NOT add any numbers or names not present in the database result above."
             )},
         ],

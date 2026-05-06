@@ -242,6 +242,23 @@ async def query_executor_node(state: dict) -> dict:
                 summary = f"OK:{action}:" + ",".join(parts) if parts else f"OK:{action}"
             all_results.append({"intent": intent, "action": action, "result": summary})
 
+        elif intent == "sales_write":
+            tagged_task = next(
+                (t for t in (state.get("tasks") or [])
+                 if t.get("intent") == intent and t.get("action") == action),
+                {},
+            )
+            items    = tagged_task.get("items", [])
+            customer = (tagged_task.get("customer") or "").title()
+
+            entry = {"intent": intent, "action": action,
+                     "result": {"status": "OK", "sales_recorded": {"customer": customer, "items": items}}}
+            if upserted:
+                entry["result"]["new_customer_registered"] = True
+            if product_corrections:
+                entry["product_corrections"] = product_corrections
+            all_results.append(entry)
+
         else:
             summary = f"OK:{action}:" + ",".join(parts) if parts else f"OK:{action}"
             all_results.append({"intent": intent, "action": action, "result": summary})

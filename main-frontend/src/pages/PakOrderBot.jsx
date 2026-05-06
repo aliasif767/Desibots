@@ -1,7 +1,9 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, Send, Trash2, X, ClipboardList } from 'lucide-react';
+import { ArrowLeft, Send, Trash2, X, ClipboardList, Mic, Languages } from 'lucide-react';
 import { motion } from 'framer-motion';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 const API = '/api/bot/pakorder';
 
@@ -18,9 +20,9 @@ function intentBadge(intent) {
 }
 
 function parseOrder(reply) {
-  const oidM = reply.match(/Order\s*ID\s*[:#\s]+#?(PKT-\w+)/i);
-  const etaM = reply.match(/ETA\s*[~:\s]*~?\s*(\d+)\s*min/i);
-  const totalM = reply.match(/TOTAL\s+Rs\s+([\d,]+)/i);
+  const oidM = reply.match(/(?:Order\s*(?:ID)?\s*[:#\s]+|#)(PKT-[A-Z0-9]{4})/i);
+  const etaM = reply.match(/(?:ETA|Estimated\s*Time|Delivery\s*in)\s*[~:\s]*~?\s*(\d+)\s*min/i);
+  const totalM = reply.match(/(?:TOTAL|Amount|Bill)\s*(?:Rs\s*)?[:\s]+([\d,]+)/i);
   const items = [];
   for (const line of reply.split('\n')) {
     const m = line.match(/^\s{1,6}(\d+)x\s+(.+?)\s{2,}Rs\s+[\d,]+/);
@@ -34,6 +36,69 @@ function parseOrder(reply) {
     total: totalM ? totalM[1] : '—', placed_at: Date.now() / 1000,
     dismissed: false, db_status: 'received', status_ts: null,
   };
+}
+
+function BillCard({ data }) {
+  if (!data) return null;
+  const { order_id, items = [], total = 0, eta = 30, payment = 'cash', address = '' } = data;
+  const payLabel = { cash: 'Cash on Delivery', easypaisa: 'EasyPaisa', jazzcash: 'JazzCash', card: 'Card' }[payment] || 'Cash';
+
+  return (
+    <div className="bill-card">
+      <div className="bill-header">
+        <div className="bill-check-circle">✅</div>
+        <h3>Order Confirmed!</h3>
+        <p className="bill-oid">Order #{order_id}</p>
+      </div>
+      
+      <div className="bill-section">
+        {items.map((it, i) => (
+          <div key={i} className="bill-item-row">
+            <span className="bill-item-qty">{it.qty}x</span>
+            <span className="bill-item-name">{it.name || 'Item'}</span>
+            <span className="bill-item-price">Rs {it.subtotal?.toLocaleString()}</span>
+          </div>
+        ))}
+      </div>
+
+      <div className="bill-divider" />
+      
+      <div className="bill-total-row">
+        <span>Total Amount</span>
+        <span className="bill-total-price">Rs {total?.toLocaleString()}</span>
+      </div>
+
+      <div className="bill-meta">
+        <div className="bill-meta-item">
+          <span className="bill-meta-icon">🕐</span>
+          <div className="bill-meta-content">
+            <label>Estimated Arrival</label>
+            <span>~{eta} Minutes</span>
+          </div>
+        </div>
+        <div className="bill-meta-item">
+          <span className="bill-meta-icon">💳</span>
+          <div className="bill-meta-content">
+            <label>Payment Method</label>
+            <span>{payLabel}</span>
+          </div>
+        </div>
+        {address && (
+          <div className="bill-meta-item">
+            <span className="bill-meta-icon">📍</span>
+            <div className="bill-meta-content">
+              <label>Delivery Address</label>
+              <span>{address}</span>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="bill-footer">
+        🙏 Shukriya! Aapka order receive ho gaya hai.
+      </div>
+    </div>
+  );
 }
 
 // ── Order Tracker Component ─────────────────────────────────────
@@ -69,7 +134,9 @@ function OrderTracker({ order, apiUrl, token, onDismiss, canAccessStaff }) {
   const prepSec = (order.prep_time || 20) * 60;
   const delivSec = (order.delivery_time || 10) * 60;
   const totalSec = prepSec + delivSec;
-  const elapsed = statusTs ? Math.max(0, now - statusTs) : 0;
+  // If we don't have statusTs yet, use order.placed_at as fallback
+  const referenceTs = statusTs || order.placed_at;
+  const elapsed = referenceTs ? Math.max(0, now - referenceTs) : 0;
 
   let remaining = 0, phaseLabel = '', overallPct = 0, stage = '';
 
@@ -156,18 +223,69 @@ function OrderTracker({ order, apiUrl, token, onDismiss, canAccessStaff }) {
 export default function PakOrderBot({ token, role, subscribedBots = [] }) {
   const canAccessStaff = role === 'admin' || subscribedBots.includes('pakorder');
   const navigate = useNavigate();
-  const [messages, setMessages] = useState([]);
+
+  // ── Persistence Logic ──────────────────────────────────────────
+  const storageKey = `pakorder_bot_state_${token.slice(-10)}`;
+  
+  const getSavedState = () => {
+    try {
+      const saved = localStorage.getItem(storageKey);
+      return saved ? JSON.parse(saved) : {};
+    } catch { return {}; }
+  };
+
+  const saved = getSavedState();
+
+  const [messages, setMessages] = useState(saved.messages || []);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
-  const [convStage, setConvStage] = useState('');
-  const [orderDraft, setOrderDraft] = useState({});
-  const [liveOrders, setLiveOrders] = useState([]);
-  const [showTracker, setShowTracker] = useState(false);
-  const [history, setHistory] = useState([]);
+  const [convStage, setConvStage] = useState(saved.convStage || '');
+  const [orderDraft, setOrderDraft] = useState(saved.orderDraft || {});
+  const [liveOrders, setLiveOrders] = useState(saved.liveOrders || []);
+  const [showTracker, setShowTracker] = useState(saved.liveOrders?.length > 0);
+  const [history, setHistory] = useState(saved.history || []);
+  
   const messagesEndRef = useRef(null);
   const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
 
+  // Sync to localStorage
+  useEffect(() => {
+    const stateToSave = { messages, history, convStage, orderDraft, liveOrders };
+    localStorage.setItem(storageKey, JSON.stringify(stateToSave));
+  }, [messages, history, convStage, orderDraft, liveOrders]);
+
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
+
+  const [isListening, setIsListening] = useState(false);
+  const [isTransliterating, setIsTransliterating] = useState(false);
+
+  const isUrdu = (text) => /[\u0600-\u06FF]/.test(text);
+
+  const transliterate = async (text) => {
+    try {
+      const res = await fetch('/api/bot/romanize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text })
+      });
+      const d = await res.json();
+      return d.romanized || text;
+    } catch { return text; }
+  };
+
+  const startSpeech = () => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) return alert("Speech recognition not supported in this browser.");
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'en-US';
+    recognition.onstart = () => setIsListening(true);
+    recognition.onresult = (e) => {
+      const transcript = e.results[0][0].transcript;
+      setInput(transcript);
+    };
+    recognition.onend = () => setIsListening(false);
+    recognition.start();
+  };
 
   const addMsg = (role, content, extra = {}) => {
     const clean = role === 'bot' ? stripHtml(content) : content;
@@ -178,8 +296,15 @@ export default function PakOrderBot({ token, role, subscribedBots = [] }) {
   };
 
   const handleSend = async (text) => {
-    const msg = (text || input).trim();
+    let msg = (typeof text === 'string' ? text : input).trim();
     if (!msg || loading) return;
+
+    if (isUrdu(msg)) {
+      setIsTransliterating(true);
+      msg = await transliterate(msg);
+      setIsTransliterating(false);
+    }
+
     setInput('');
     addMsg('user', msg);
     setLoading(true);
@@ -214,7 +339,7 @@ export default function PakOrderBot({ token, role, subscribedBots = [] }) {
           }
         }
 
-        addMsg('bot', reply, { intent: iStr });
+        addMsg('bot', reply, { intent: iStr, type: data.res_type, data: data.res_data });
       }
     } catch (err) {
       addMsg('bot', `Error: ${err.message}`, { isError: true });
@@ -236,7 +361,7 @@ export default function PakOrderBot({ token, role, subscribedBots = [] }) {
         <div className="bot-topbar-left">
           <button className="btn btn-outline" onClick={() => navigate('/dashboard')} style={{padding:'0.4rem 0.8rem',borderRadius:8}}><ArrowLeft size={16}/> Back</button>
           <div className="bot-status-dot" style={{background:'#f59e0b',boxShadow:'0 0 10px #f59e0b'}} />
-          <span style={{fontWeight:600,fontSize:'1.05rem'}}>🍛 PakOrderBot Workspace</span>
+          <span style={{fontWeight:600,fontSize:'1.05rem'}}>🍛 PakOrder Bot Workspace</span>
         </div>
         {activeOrders.length > 0 && (
           <button className="btn btn-outline" onClick={() => setShowTracker(!showTracker)} style={{borderRadius:10,fontSize:'0.82rem',borderColor:'rgba(16,185,129,0.3)',color:'#34d399'}}>
@@ -267,7 +392,7 @@ export default function PakOrderBot({ token, role, subscribedBots = [] }) {
             {messages.length === 0 && (
               <div className="chat-welcome">
                 <div className="chat-welcome-icon">🍛</div>
-                <h3>PakOrderBot mein khush aamdeed!</h3>
+                <h3>PakOrder Bot mein khush aamdeed!</h3>
                 <p style={{lineHeight:1.8}}>
                   Menu: "menu dikhao"<br/>Order: "2 chicken biryani order karo"<br/>Deals: "koi offers hain?"
                 </p>
@@ -279,11 +404,15 @@ export default function PakOrderBot({ token, role, subscribedBots = [] }) {
                 <div className={`msg-avatar ${msg.role === 'user' ? 'user-avatar-sm' : 'bot-avatar'}`}>
                   {msg.role === 'user' ? 'You' : '🍛'}
                 </div>
-                <div>
-                  <div className={`msg-bubble ${msg.role === 'user' ? 'user-bubble' : msg.isError ? 'error-bubble' : 'bot-bubble'}`}>
-                    <div style={{whiteSpace:'pre-wrap'}}>{msg.content}</div>
+                <div style={{display:'flex', flexDirection:'column', alignItems: msg.role==='user'?'flex-end':'flex-start', maxWidth:'85%', flex:1}}>
+                  <div className={`msg-bubble ${msg.role === 'user' ? 'user-bubble' : msg.isError ? 'error-bubble' : 'bot-bubble'}`} style={msg.type === 'bill' ? {padding: 0, background: 'transparent', border: 'none', boxShadow: 'none'} : {}}>
+                    {msg.type === 'bill' ? (
+                      <BillCard data={msg.data} />
+                    ) : (
+                      <div className="markdown-content"><ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown></div>
+                    )}
                   </div>
-                  <div style={{display:'flex',gap:'0.5rem',alignItems:'center'}}>
+                  <div style={{display:'flex',gap:'0.5rem',alignItems:'center', alignSelf: msg.role==='user'?'flex-end':'flex-start', padding:'0 0.2rem'}}>
                     {msg.intent && !msg.isError && intentBadge(msg.intent)}
                     <span className="msg-time">{msg.time}</span>
                   </div>
@@ -301,8 +430,23 @@ export default function PakOrderBot({ token, role, subscribedBots = [] }) {
           </div>
 
           <div className="chat-input-bar">
-            <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSend()} placeholder="Roman Urdu mein likhein..." disabled={loading} />
-            <button className="chat-send-btn" onClick={() => handleSend()} disabled={loading || !input.trim()}><Send size={16}/> Send</button>
+            <button className={`btn-icon ${isListening ? 'listening' : ''}`} onClick={startSpeech} disabled={loading}>
+              <Mic size={20} color={isListening ? '#ef4444' : 'currentColor'} />
+            </button>
+            <input 
+              value={input} onChange={e => setInput(e.target.value)} 
+              onKeyDown={e => e.key === 'Enter' && handleSend()} 
+              placeholder={isTransliterating ? "Romanizing Urdu..." : "Roman Urdu mein likhein..."} 
+              disabled={loading || isTransliterating} 
+            />
+            {isUrdu(input) && (
+              <div className="input-indicator transliterating" style={{fontSize:'0.65rem', color:'#f59e0b', display:'flex', alignItems:'center', gap:'0.2rem', padding:'0 0.5rem'}}>
+                <Languages size={12} /> Romanizing...
+              </div>
+            )}
+            <button className="chat-send-btn" onClick={() => handleSend()} disabled={loading || !input.trim() || isTransliterating}>
+              <Send size={16}/> Send
+            </button>
           </div>
         </div>
 
@@ -343,6 +487,7 @@ export default function PakOrderBot({ token, role, subscribedBots = [] }) {
             <button className="quick-btn" onClick={() => {
               setMessages([]); setHistory([]); setLiveOrders([]);
               setConvStage(''); setOrderDraft({}); setShowTracker(false);
+              localStorage.removeItem(storageKey);
             }} style={{display:'flex',alignItems:'center',gap:'0.4rem',justifyContent:'center'}}>
               <Trash2 size={14}/> Clear Chat
             </button>

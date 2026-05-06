@@ -133,12 +133,10 @@ Respond ONLY with a JSON object:
 """
 
 
-def get_llm(temperature: float = 0.0):
-    return ChatGroq(
-        api_key=settings.GROQ_API_KEY,
-        model_name=settings.GROQ_MODEL,
-        temperature=temperature,
-    )
+from groq import Groq
+
+def _get_client():
+    return Groq(api_key=settings.GROQ_API_KEY)
 
 
 def _extract_json(text: str) -> dict:
@@ -153,7 +151,6 @@ def _extract_json(text: str) -> dict:
         try:
             return json.loads(json_str)
         except json.JSONDecodeError:
-            # Fallback to the original text if slicing failed for some reason
             return json.loads(text)
     return json.loads(text)
 
@@ -162,18 +159,19 @@ async def classify_emergency(query: str) -> ClassificationResult:
     """
     Semantically classify a free-text emergency query into a structured
     (emergency_type, subtype, acuity) triple using the Groq LLM.
-
-    The LLM is given the full DB catalogue so it maps to real entries
-    rather than inventing its own type names.
     """
-    llm = get_llm(temperature=0.0)
-    messages = [
-        SystemMessage(content=CLASSIFICATION_SYSTEM),
-        HumanMessage(content=f"User message: {query}"),
-    ]
+    client = _get_client()
     try:
-        response = await llm.ainvoke(messages)
-        data = _extract_json(response.content)
+        completion = client.chat.completions.create(
+            messages=[
+                {"role": "system", "content": CLASSIFICATION_SYSTEM},
+                {"role": "user", "content": f"User message: {query}"}
+            ],
+            model=settings.GROQ_MODEL,
+            temperature=0.0,
+            response_format={"type": "json_object"}
+        )
+        data = json.loads(completion.choices[0].message.content)
     except Exception as e:
         print(f"Classification failed: {str(e)}")
         data = {"emergency_type": "unknown", "subtype": None, "acuity": "low", "language": "english"}
@@ -201,15 +199,19 @@ async def classify_intent(message: str, context: str = "") -> dict:
     Classify whether a follow-up message is a new emergency, a doctor check,
     a booking request, or a follow-up question.
     """
-    llm = get_llm(temperature=0.0)
+    client = _get_client()
     prompt = f"Context: {context}\nUser message: {message}" if context else f"User message: {message}"
-    messages = [
-        SystemMessage(content=INTENT_SYSTEM),
-        HumanMessage(content=prompt),
-    ]
     try:
-        response = await llm.ainvoke(messages)
-        return _extract_json(response.content)
+        completion = client.chat.completions.create(
+            messages=[
+                {"role": "system", "content": INTENT_SYSTEM},
+                {"role": "user", "content": prompt}
+            ],
+            model=settings.GROQ_MODEL,
+            temperature=0.0,
+            response_format={"type": "json_object"}
+        )
+        return json.loads(completion.choices[0].message.content)
     except Exception as e:
         print(f"Intent classification failed: {str(e)}")
         return {"intent": "emergency", "confidence": 0.5}
@@ -218,17 +220,19 @@ async def classify_intent(message: str, context: str = "") -> dict:
 async def generate_fallback_advice(query: str, acuity: str) -> str:
     """
     Generate first-aid advice using LLM when no DB record matches.
-    Used as a safe fallback with appropriate disclaimers.
     """
-    llm = get_llm(temperature=0.1)
+    client = _get_client()
     prompt = f"Acuity: {acuity}\nSituation: {query}"
-    messages = [
-        SystemMessage(content=FALLBACK_SYSTEM),
-        HumanMessage(content=prompt),
-    ]
     try:
-        response = await llm.ainvoke(messages)
-        return response.content.strip()
+        completion = client.chat.completions.create(
+            messages=[
+                {"role": "system", "content": FALLBACK_SYSTEM},
+                {"role": "user", "content": prompt}
+            ],
+            model=settings.GROQ_MODEL,
+            temperature=0.1
+        )
+        return completion.choices[0].message.content.strip()
     except Exception as e:
         print(f"Fallback generation failed: {str(e)}")
         return "I am currently unable to analyze this situation due to an AI processing issue. Please call emergency services if this is urgent."
@@ -238,21 +242,24 @@ async def answer_followup(question: str, emergency_context: str) -> str:
     """
     Answer a follow-up medical question in the context of the current emergency.
     """
-    llm = get_llm(temperature=0.2)
+    client = _get_client()
     system = """You are an AI first-aid assistant. The user is asking a follow-up question
 about a medical emergency that is already being handled. Answer clearly and concisely.
 Use plain language. If you are unsure, say so and advise the user to consult a professional.
 End with a reminder to keep emergency services involved if the situation is serious.
-- Very Important: ALWAYS reply in the exact language the user used to ask the question. If the user asks in Roman Urdu (e.g. "mery bhai ko heartattack..."), you MUST respond in Roman Urdu."""
+- Very Important: ALWAYS reply in the exact language the user used to ask the question. If the user asks in Roman Urdu, you MUST respond in Roman Urdu."""
 
     prompt = f"Emergency context: {emergency_context}\n\nFollow-up question: {question}"
-    messages = [
-        SystemMessage(content=system),
-        HumanMessage(content=prompt),
-    ]
     try:
-        response = await llm.ainvoke(messages)
-        return response.content.strip()
+        completion = client.chat.completions.create(
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": prompt}
+            ],
+            model=settings.GROQ_MODEL,
+            temperature=0.2
+        )
+        return completion.choices[0].message.content.strip()
     except Exception as e:
         print(f"Follow up answering failed: {str(e)}")
         return "I am currently unable to provide a response due to an AI processing issue. Please consult a medical professional."
@@ -287,8 +294,7 @@ async def translate_db_record(
             "notes": notes
         }
 
-    llm = get_llm(temperature=0.0)
-    import json
+    client = _get_client()
     payload = {
         "type": type_name,
         "subtype": subtype_name,
@@ -297,14 +303,17 @@ async def translate_db_record(
     }
     prompt = f"Target language: {target_language}\nData to translate: {json.dumps(payload)}"
     
-    messages = [
-        SystemMessage(content=TRANSLATE_SYSTEM),
-        HumanMessage(content=prompt),
-    ]
     try:
-        response = await llm.ainvoke(messages)
-        data = _extract_json(response.content)
-        return data
+        completion = client.chat.completions.create(
+            messages=[
+                {"role": "system", "content": TRANSLATE_SYSTEM},
+                {"role": "user", "content": prompt}
+            ],
+            model=settings.GROQ_MODEL,
+            temperature=0.0,
+            response_format={"type": "json_object"}
+        )
+        return json.loads(completion.choices[0].message.content)
     except Exception as e:
         print(f"Translation failed: {str(e)}")
         return {

@@ -7,7 +7,7 @@ from app.agents.classifier import (
     translate_db_record,
     DB_CATALOGUE,
 )
-from app.services.scheduling import check_and_book
+from app.services.scheduling import check_and_book, get_available_doctors
 from app.models.schemas import FirstAidResponse, FirstAidStep, MedicalFollowup
 
 
@@ -134,9 +134,36 @@ async def process_chat_message(message: str, context: str = "") -> dict:
         answer = await answer_followup(message, context)
         return {"intent": intent, "response_type": "followup", "data": answer}
 
+    if intent == "check_doctor":
+        # Call with 'general' or try to infer specialty from message if possible
+        doctors = await get_available_doctors("general", search_query=message)
+        if not doctors:
+            return {"intent": intent, "response_type": "followup", "data": "I couldn't find any available doctors matching your request at the moment."}
+        
+        # Format the doctor list professionally for WhatsApp/Chat
+        resp = "🏥 *Available Doctors:*\n\n"
+        for doc in doctors[:5]:
+            name = doc.get("doctor_name")
+            spec = doc.get("specialty")
+            loc  = doc.get("location")
+            avail = doc.get("availability")
+            resp += f"👨‍⚕️ *{name}*\n• {spec}\n• {loc}\n• {avail}\n\n"
+        
+        resp += "_Type 'book' followed by the doctor's name to schedule an appointment._"
+        return {"intent": intent, "response_type": "followup", "data": resp}
+
+    if intent == "my_appointments":
+        return {"intent": intent, "response_type": "followup", "data": "You don't have any active appointments in your history yet. Type 'check doctors' to find a specialist."}
+
     if intent in ("emergency",):
         data = await process_emergency(message)
         return {"intent": intent, "response_type": "emergency", "data": data}
 
-    # For book / check_doctor / confirm / cancel — let the Streamlit layer handle
-    return {"intent": intent, "response_type": "intent_only", "data": None}
+    # For book / confirm / cancel — return a friendly message
+    msg_map = {
+        "book":    "I can help you with that! Please provide your full name, phone number, and the doctor's name you'd like to book.",
+        "confirm": "Okay, I am processing your request. Please wait a moment.",
+        "cancel":  "No problem, I have cancelled the action. How else can I help?",
+    }
+    reply = msg_map.get(intent, "I'm not sure how to help with that. Try asking about a medical emergency or checking for available doctors.")
+    return {"intent": intent, "response_type": "followup", "data": reply}

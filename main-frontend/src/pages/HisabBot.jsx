@@ -1,7 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Send, Trash2, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Send, Trash2, RefreshCw, Mic, Languages } from 'lucide-react';
 import { motion } from 'framer-motion';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 const API = '/api/bot/hisabot';
 
@@ -93,7 +95,7 @@ function ReportView({ token }) {
       {data && (
         <>
           <div className="report-card">
-            <div className="report-header-text">HISABBOT · {tab.toUpperCase()} REPORT</div>
+            <div className="report-header-text">Hisab Bot · {tab.toUpperCase()} REPORT</div>
             <div className="report-title">{tab === 'daily' ? 'Roz ka' : tab === 'weekly' ? 'Hafte ka' : 'Mahine ka'} Business Report</div>
             <div className="report-sub">{data.date_label} · Generated: {data.generated_at}</div>
           </div>
@@ -231,13 +233,33 @@ function ReportView({ token }) {
 // ── Main Component ──────────────────────────────────────────────
 export default function HisabBot({ token }) {
   const navigate = useNavigate();
+
+  // ── Persistence Logic ──────────────────────────────────────────
+  const storageKey = `hisabot_state_${token.slice(-10)}`;
+  
+  const getSavedState = () => {
+    try {
+      const saved = localStorage.getItem(storageKey);
+      return saved ? JSON.parse(saved) : {};
+    } catch { return {}; }
+  };
+
+  const saved = getSavedState();
+
   const [page, setPage] = useState('chat');
-  const [messages, setMessages] = useState([]);
+  const [messages, setMessages] = useState(saved.messages || []);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
-  const [stats, setStats] = useState({ total:0, writes:0, reads:0 });
+  const [stats, setStats] = useState(saved.stats || { total:0, writes:0, reads:0 });
+  
   const messagesEndRef = useRef(null);
   const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+
+  // Sync to localStorage
+  useEffect(() => {
+    const stateToSave = { messages, stats };
+    localStorage.setItem(storageKey, JSON.stringify(stateToSave));
+  }, [messages, stats]);
 
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
@@ -246,9 +268,47 @@ export default function HisabBot({ token }) {
     setStats(prev => ({ ...prev, total: prev.total + 1 }));
   };
 
+  const [isListening, setIsListening] = useState(false);
+  const [isTransliterating, setIsTransliterating] = useState(false);
+
+  const isUrdu = (text) => /[\u0600-\u06FF]/.test(text);
+
+  const transliterate = async (text) => {
+    try {
+      const res = await fetch('/api/bot/romanize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text })
+      });
+      const d = await res.json();
+      return d.romanized || text;
+    } catch { return text; }
+  };
+
+  const startSpeech = () => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) return alert("Speech recognition not supported in this browser.");
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'en-US';
+    recognition.onstart = () => setIsListening(true);
+    recognition.onresult = (e) => {
+      const transcript = e.results[0][0].transcript;
+      setInput(transcript);
+    };
+    recognition.onend = () => setIsListening(false);
+    recognition.start();
+  };
+
   const handleSend = async (text) => {
-    const msg = (text || input).trim();
+    let msg = (typeof text === 'string' ? text : input).trim();
     if (!msg || loading) return;
+
+    if (isUrdu(msg)) {
+      setIsTransliterating(true);
+      msg = await transliterate(msg);
+      setIsTransliterating(false);
+    }
+
     setInput('');
     addMsg('user', msg);
     setLoading(true);
@@ -284,7 +344,7 @@ export default function HisabBot({ token }) {
         <div className="bot-topbar-left">
           <button className="btn btn-outline" onClick={() => navigate('/dashboard')} style={{padding:'0.4rem 0.8rem',borderRadius:8}}><ArrowLeft size={16}/> Back</button>
           <div className="bot-status-dot" style={{background:'#34d399',boxShadow:'0 0 10px #34d399'}} />
-          <span style={{fontWeight:600,fontSize:'1.05rem'}}>🧾 HisabBot Workspace</span>
+          <span style={{fontWeight:600,fontSize:'1.05rem'}}>🧾 Hisab Bot Workspace</span>
         </div>
         <div className="page-tabs">
           <button className={`page-tab ${page==='chat'?'active':''}`} onClick={() => setPage('chat')}>💬 Chat</button>
@@ -299,7 +359,7 @@ export default function HisabBot({ token }) {
               {messages.length === 0 && (
                 <div className="chat-welcome">
                   <div className="chat-welcome-icon">🧾</div>
-                  <h3>HisabBot ready hai</h3>
+                  <h3>Hisab Bot ready hai</h3>
                   <p>Roman Urdu mein apna sawaal ya hukum likhein</p>
                 </div>
               )}
@@ -308,7 +368,7 @@ export default function HisabBot({ token }) {
                   <div className={`msg-avatar ${msg.role==='user'?'user-avatar-sm':'bot-avatar'}`}>{msg.role==='user'?'You':'🧾'}</div>
                   <div>
                     <div className={`msg-bubble ${msg.role==='user'?'user-bubble':msg.isError?'error-bubble':'bot-bubble'}`}>
-                      <div style={{whiteSpace:'pre-wrap'}}>{msg.content}</div>
+                      <div className="markdown-content"><ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown></div>
                     </div>
                     {msg.intent && !msg.isError && intentBadge(msg.intent)}
                     <div className="msg-time">{msg.time}</div>
@@ -319,8 +379,21 @@ export default function HisabBot({ token }) {
               <div ref={messagesEndRef} />
             </div>
             <div className="chat-input-bar">
-              <input value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==='Enter'&&handleSend()} placeholder="Roman Urdu mein likhein... (e.g. ali ko 50 bag cheeni 3550 per bag diya)" disabled={loading} />
-              <button className="chat-send-btn" onClick={()=>handleSend()} disabled={loading||!input.trim()}><Send size={16}/> Send</button>
+              <button className={`btn-icon ${isListening ? 'listening' : ''}`} onClick={startSpeech} disabled={loading}>
+                <Mic size={20} color={isListening ? '#ef4444' : 'currentColor'} />
+              </button>
+              <input 
+                value={input} onChange={e=>setInput(e.target.value)} 
+                onKeyDown={e=>e.key==='Enter'&&handleSend()} 
+                placeholder={isTransliterating ? "Romanizing Urdu..." : "Roman Urdu mein likhein..."} 
+                disabled={loading || isTransliterating} 
+              />
+              {isUrdu(input) && (
+                <div className="input-indicator transliterating" style={{fontSize:'0.65rem', color:'#d946ef', display:'flex', alignItems:'center', gap:'0.2rem', padding:'0 0.5rem'}}>
+                  <Languages size={12} /> Transliterating...
+                </div>
+              )}
+              <button className="chat-send-btn" onClick={()=>handleSend()} disabled={loading||!input.trim()||isTransliterating}><Send size={16}/> Send</button>
             </div>
           </div>
 
@@ -335,7 +408,7 @@ export default function HisabBot({ token }) {
               <button key={label} className="quick-btn" onClick={() => handleSend(cmd)}>{label}</button>
             ))}
             <hr style={{border:'none',borderTop:'1px solid var(--card-border)',margin:'0.5rem 0'}} />
-            <button className="quick-btn" onClick={() => { setMessages([]); setStats({total:0,writes:0,reads:0}); }} style={{display:'flex',alignItems:'center',gap:'0.4rem',justifyContent:'center'}}>
+            <button className="quick-btn" onClick={() => { setMessages([]); setStats({total:0,writes:0,reads:0}); localStorage.removeItem(storageKey); }} style={{display:'flex',alignItems:'center',gap:'0.4rem',justifyContent:'center'}}>
               <Trash2 size={14}/> Clear Chat
             </button>
           </div>

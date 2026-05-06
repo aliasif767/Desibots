@@ -78,38 +78,36 @@ async def _enrich(items):
 
 def _cart_summary(draft):
     """Short cart summary for 'koi aur cheez?' message."""
-    lines = ["🛒 Aapka Cart:\n"]
+    lines = ["### 🛒 Aapka Cart:\n"]
     for it in draft.get("items",[]):
-        lines.append(f"  {it['qty']}x {it['name'].title()} — Rs {it['subtotal']:,.0f}")
-    lines.append(f"\n💰 Total: Rs {draft.get('total',0):,.0f}")
-    lines.append("\nKoi aur cheez add karni hai? (haan / nahi)")
+        lines.append(f"- {it['qty']}x **{it['name'].title()}** — Rs {it['subtotal']:,.0f}")
+    lines.append(f"\n**💰 Total: Rs {draft.get('total',0):,.0f}**")
+    lines.append("\n*Koi aur cheez add karni hai?* (haan / nahi)")
     return "\n".join(lines)
 
 
 def _bill(draft):
     PAY = {"cash":"Cash on Delivery","easypaisa":"EasyPaisa","jazzcash":"JazzCash","card":"Card"}
     lines = [
-        "╔════════════════════════════════════════╗",
-        "║        🍛   PakOrderBot Bill   🍛        ║",
-        "╠════════════════════════════════════════╣",
-        f"  Order ID  : #{draft.get('order_id','?')}",
-        f"  Naam      : {(draft.get('customer_name') or 'Mehman').title()}",
-        f"  Phone     : {draft.get('customer_phone') or '—'}",
-        f"  Address   : {draft.get('customer_address') or '—'}",
-        "────────────────────────────────────────",
-        "  ITEMS:",
+        "### 🍛 PakOrderBot Bill",
+        "---",
+        f"- **Order ID**: `#{draft.get('order_id','?')}`",
+        f"- **Naam**: {(draft.get('customer_name') or 'Mehman').title()}",
+        f"- **Phone**: {draft.get('customer_phone') or '—'}",
+        f"- **Address**: {draft.get('customer_address') or '—'}",
+        "---",
+        "#### Items:"
     ]
     for it in draft.get("items",[]):
-        lines.append(f"  {it['qty']}x {it['name'].title():<26} Rs {it['subtotal']:>6,.0f}")
+        lines.append(f"- {it['qty']}x **{it['name'].title()}** — Rs {it['subtotal']:,.0f}")
     lines += [
-        "────────────────────────────────────────",
-        f"  💰 TOTAL                    Rs {draft.get('total',0):>6,.0f}",
-        f"  🕐 ETA                      ~{draft.get('eta',30)} minutes",
-        f"  💳 Payment                  {PAY.get(draft.get('payment_method','cash'),'Cash on Delivery')}",
-        "╚════════════════════════════════════════╝",
+        "---",
+        f"- 💰 **TOTAL**: **Rs {draft.get('total',0):,.0f}**",
+        f"- 🕐 **ETA**: ~{draft.get('eta',30)} minutes",
+        f"- 💳 **Payment**: {PAY.get(draft.get('payment_method','cash'),'Cash on Delivery')}",
         "",
-        "✅ Confirm ke liye  →  YES",
-        "❌ Cancel ke liye   →  NO",
+        "✅ Confirm ke liye → **YES**",
+        "❌ Cancel ke liye → **NO**"
     ]
     return "\n".join(lines)
 
@@ -118,17 +116,16 @@ def _menu_display(items):
     EMOJI = {"main course":"🍛","starter":"🥙","side":"🫓","drink":"🥤","dessert":"🍮"}
     cats  = {}
     for it in items: cats.setdefault(it.get("category","other"),[]).append(it)
-    lines = ["╔══════════════════════════════════════╗",
-             "║          🍽️   HAMARA MENU   🍽️         ║",
-             "╚══════════════════════════════════════╝"]
+    lines = ["### 🍽️ HAMARA MENU\n---"]
     for cat, citems in cats.items():
-        lines += [f"\n{EMOJI.get(cat,'🍴')}  {cat.upper()}", "─"*42]
+        lines += [f"#### {EMOJI.get(cat,'🍴')} {cat.upper()}"]
         for it in citems:
             av = "✅" if it.get("available") else "❌"
-            lines.append(f"  {av} {it.get('name','').title():<26} Rs {it.get('price',0):>4,.0f}  ({it.get('prep_time',0)} min)")
+            lines.append(f"- {av} **{it.get('name','').title()}** — Rs {it.get('price',0):,.0f} *({it.get('prep_time',0)} min)*")
             if it.get("description"):
-                lines.append(f"     └─ {it['description']}")
-    lines.append("\n💬 Order karne ke liye: '2 chicken biryani order karo'")
+                lines.append(f"  > {it['description']}")
+        lines.append("")
+    lines.append("💬 Order karne ke liye: *'2 chicken biryani order karo'*")
     return "\n".join(lines)
 
 
@@ -136,16 +133,49 @@ def _offers_display(offers):
     if not offers:
         return ("😔 Maafi! Abhi tak koi special offer ya deal available nahi hai.\n"
                 "Jaldi hi nayi deals aa rahi hain — dobara check karte rahein! 🙏")
-    lines = ["╔══════════════════════════════════════╗",
-             "║     🎉  SPECIAL OFFERS & DEALS  🎉    ║",
-             "╚══════════════════════════════════════╝"]
-    for o in offers:
-        lines.append(f"\n🔥  {o.get('title','').upper()}")
-        lines.append(f"   {o.get('description','')}")
-        if o.get("discount_pct"):  lines.append(f"   💰 {o['discount_pct']}% OFF!")
-        if o.get("deal_price"):    lines.append(f"   💰 Deal Price: Rs {o['deal_price']:,.0f}")
-        if o.get("valid_until"):   lines.append(f"   ⏰ Valid till: {o['valid_until']}")
-        lines.append("─"*42)
+    
+    # Filter only active offers if we didn't already
+    active_offers = [o for o in offers if o.get("active", True)]
+    if not active_offers:
+        return ("😔 Maafi! Is waqt koi active offer available nahi hai.\n"
+                "Nayi deals ke liye check karte rahein! 🙏")
+
+    lines = ["### 🎉 SPECIAL OFFERS & DEALS\n---"]
+    for o in active_offers:
+        title = o.get("title", "Special Deal").upper()
+        lines.append(f"#### 🔥 **{title}**")
+        
+        # ── Description / Discount Text ──
+        # Handle both backend 'description' and frontend 'discount' (which is often used as desc)
+        desc = o.get("description") or o.get("discount") or ""
+        if desc:
+            lines.append(f"> {desc}")
+        
+        # ── Items ──
+        its = o.get("items")
+        if its:
+            if isinstance(its, list):
+                if its: lines.append(f"- 📦 **Items**: {', '.join(its).title()}")
+            elif isinstance(its, str) and its.strip():
+                lines.append(f"- 📦 **Items**: {its.title()}")
+
+        # ── Percent / Price ──
+        pct = o.get("discount_pct")
+        if pct:
+            lines.append(f"- 💰 **{pct}% OFF!**")
+        
+        price = o.get("deal_price")
+        if price:
+            lines.append(f"- 💰 Deal Price: **Rs {price:,.0f}**")
+            
+        # ── Validity ──
+        until = o.get("valid_until")
+        if until:
+            lines.append(f"- ⏰ Valid till: {until}")
+            
+        lines.append("\n---")
+    
+    lines.append("\n💬 Order karne ke liye: *'Friday special deal order karo'*")
     return "\n".join(lines)
 
 
@@ -188,6 +218,7 @@ DATE PLACEHOLDERS (never hardcode dates):
   __WEEK_START__      = 7 days ago start
   __MONTH_START__     = first of current month
   __HOUR_AGO__        = 1 hour ago
+  __NOW__             = exact current UTC timestamp (use this for status_updated_at/created_at)
 """
 
 ROUTER_PROMPT = f"""
@@ -384,18 +415,18 @@ Generate exactly:
       "customer_phone":"<phone or null>","customer_address":"<address or null>",
       "items":[<from context>],"total_amount":<total>,
       "status":"received","payment_method":"<cash or from context>","payment_status":"pending",
-      "notes":"<or null>","created_at":"__TODAY_START__","updated_at":"__TODAY_START__",
+      "notes":"<or null>","created_at":"__NOW__","updated_at":"__NOW__","status_updated_at":"__NOW__",
       "estimated_time":<eta>
     }}}},
     {{"operation":"update_one","collection":"customers","filter":{{"phone":"<phone>"}},
       "update":{{
         "$inc":{{"total_orders":1,"total_spent":<total>}},
-        "$set":{{"last_order_at":"__TODAY_START__","name":"<name>","address":"<address>"}},
-        "$setOnInsert":{{"joined_at":"__TODAY_START__"}}
+        "$set":{{"last_order_at":"__NOW__","name":"<name>","address":"<address>"}},
+        "$setOnInsert":{{"joined_at":"__NOW__"}}
       }},"upsert":true}}
   ]
 }}
-Skip customer upsert if no phone. Use exact values from context — never invent.
+STRICT: DO NOT use ASCII-art, boxes, or lines (e.g. ||, ==, --) to draw a bill. Use simple Markdown lists and bold text ONLY.
 """
 
 ORDER_READ_PROMPT = f"""MongoDB query for order tracking & staff status updates. {JSON_RULE}
@@ -659,7 +690,7 @@ def _staff_orders_display(orders: list) -> str:
     if not orders:
         return "📭 Koi order nahi mila."
     STATUS_EM = {"received":"📥","preparing":"👨‍🍳","ready":"✅","dispatched":"🚗","delivered":"✓","cancelled":"❌"}
-    lines = [f"📋 Orders ({len(orders)} total)\n{'─'*44}"]
+    lines = [f"### 📋 Orders ({len(orders)} total)\n---"]
     for o in orders[:20]:
         oid    = o.get("order_id","?")
         name   = (o.get("customer_name") or "Mehman").title()
@@ -670,12 +701,14 @@ def _staff_orders_display(orders: list) -> str:
         items  = ", ".join(f"{i.get('qty',1)}x {i.get('name','').title()}" for i in o.get("items",[]))
         created = o.get("created_at","")
         ts = created.strftime("%H:%M") if hasattr(created,"strftime") else str(created)[:16] if created else ""
-        lines.append(f"  {sem} #{oid}  {name}  ·  Rs {total:,.0f}  [{status.upper()}]")
-        lines.append(f"     📱 {phone}  ·  {items}")
-        if ts: lines.append(f"     🕐 {ts}")
-        lines.append("")
+        lines.append(f"#### {sem} `#{oid}` — {name}")
+        lines.append(f"- **Total**: Rs {total:,.0f} `[{status.upper()}]`")
+        lines.append(f"- **Phone**: {phone}")
+        lines.append(f"- **Items**: {items}")
+        if ts: lines.append(f"- **Time**: {ts}")
+        lines.append("---")
     if len(orders) > 20:
-        lines.append(f"  ... aur {len(orders)-20} orders (staff panel mein poora dekho)")
+        lines.append(f"*... aur {len(orders)-20} orders (staff panel mein poora dekho)*")
     return "\n".join(lines)
 
 
@@ -711,30 +744,28 @@ def _staff_analytics_display(data: dict, user_msg: str = "") -> str:
         ]
         if not valid_rows:
             return "📭 Top items data mein item names nahi mile. Orders ka data check karein."
-        MEDALS = ["🥇","🥈","🥉","  4.","  5.","  6.","  7.","  8.","  9."," 10."]
+        MEDALS = ["🥇","🥈","🥉","4.","5.","6.","7.","8.","9.","10."]
         lines = [
-            "🏆 TOP SELLING ITEMS",
-            "─"*46,
-            f"  {'Rank':<5} {'Item Name':<24} {'Qty':>5}   {'Revenue':>10}",
-            "  " + "─"*44,
+            "### 🏆 TOP SELLING ITEMS",
+            "| Rank | Item Name | Qty | Revenue |",
+            "|---|---|---|---|"
         ]
         for i, row in enumerate(valid_rows[:10]):
             name  = row["_id"].title()
             qty   = row.get(qty_key, 0) or 0
             rev   = row.get(rev_key, 0) if rev_key else 0
-            medal = MEDALS[i] if i < len(MEDALS) else f"{i+1:3}."
-            lines.append(f"  {medal:<5} {name:<24} {qty:>4} pcs   Rs {rev:>8,.0f}")
-        lines.append("  " + "─"*44)
+            medal = MEDALS[i] if i < len(MEDALS) else f"{i+1}."
+            lines.append(f"| {medal} | **{name}** | {qty} pcs | Rs {rev:,.0f} |")
         return "\n".join(lines)
 
     # ── STATUS BREAKDOWN: has _id (status string) + count field ──────────────
     if "count" in first and "_id" in first and "total_orders" not in first:
         STATUS_EM = {"received":"📥","preparing":"👨‍🍳","ready":"✅","dispatched":"🚗","delivered":"✓","cancelled":"❌"}
-        lines = ["📊 STATUS BREAKDOWN\n" + "─"*30]
+        lines = ["### 📊 STATUS BREAKDOWN\n---"]
         for row in rows_raw:
             s = str(row.get("_id") or "?")
             c = row.get("count", 0)
-            lines.append(f"  {STATUS_EM.get(s,'')} {s.upper():<14} {c} orders")
+            lines.append(f"- {STATUS_EM.get(s,'')} **{s.upper()}**: {c} orders")
         return "\n".join(lines)
 
     # ── AGGREGATE SUMMARY: total_orders / total_revenue ──────────────────────
@@ -757,20 +788,19 @@ def _staff_analytics_display(data: dict, user_msg: str = "") -> str:
             period = "PERIOD"
 
         lines = [
-            f"📊 {period} KI SALES REPORT",
-            "═"*40,
-            f"  📦 Total Orders      : {total_ord}",
-            f"  💰 Total Revenue     : Rs {total_rev:,.0f}",
-            f"  📈 Avg Order Value   : Rs {avg_ord:,.0f}",
-            f"  💵 Est. Profit (35%) : Rs {est_profit:,.0f}",
+            f"### 📊 {period} KI SALES REPORT",
+            "---",
+            f"- 📦 **Total Orders**      : {total_ord}",
+            f"- 💰 **Total Revenue**     : Rs {total_rev:,.0f}",
+            f"- 📈 **Avg Order Value**   : Rs {avg_ord:,.0f}",
+            f"- 💵 **Est. Profit (35%)** : Rs {est_profit:,.0f}",
         ]
         if cancelled:
-            lines.append(f"  ❌ Cancelled         : {cancelled}")
+            lines.append(f"- ❌ **Cancelled**         : {cancelled}")
         if delivered:
-            lines.append(f"  ✓  Delivered         : {delivered}")
-        lines.append("═"*40)
+            lines.append(f"- ✓  **Delivered**         : {delivered}")
         if total_ord == 0:
-            lines.append("  ℹ️  Is period mein koi order nahi aaya.")
+            lines.append("\n*ℹ️ Is period mein koi order nahi aaya.*")
         return "\n".join(lines)
 
     return ""
@@ -780,7 +810,7 @@ def _staff_customer_display(data: list, title: str = "CUSTOMER INFO") -> str:
     """Format customer records for staff."""
     if not data:
         return "👤 Koi customer record nahi mila."
-    lines = [f"👤 {title} ({len(data)} records)\n" + "─"*42]
+    lines = [f"### 👤 {title} ({len(data)} records)\n---"]
     for i, c in enumerate(data[:20], 1):
         name    = (c.get("name") or "—").title()
         phone   = c.get("phone","—") or "—"
@@ -790,36 +820,38 @@ def _staff_customer_display(data: list, title: str = "CUSTOMER INFO") -> str:
         last    = c.get("last_order_at","")
         last_ts = last.strftime("%d %b %Y") if hasattr(last,"strftime") else str(last)[:10] if last else "—"
         lines += [
-            f"  {i:2}. 👤 {name}  ·  📱 {phone}",
-            f"      📍 {addr[:50]}",
-            f"      📦 {orders} orders  ·  💰 Rs {spent:,.0f} total  ·  🕐 Last: {last_ts}",
-            "",
+            f"#### {i}. 👤 {name}",
+            f"- 📱 **Phone**: {phone}",
+            f"- 📍 **Address**: {addr[:50]}",
+            f"- 📦 **Orders**: {orders} | 💰 **Total**: Rs {spent:,.0f} | 🕐 **Last**: {last_ts}",
+            "---",
         ]
     return "\n".join(lines)
 
 
 def _staff_feedback_display(data: list) -> str:
-    """Format customer feedback for staff."""
+    """Format customer feedback for staff using clean Markdown."""
     if not data:
         return "💬 Abhi tak koi customer feedback nahi mila."
-    lines = [f"💬 CUSTOMER FEEDBACK ({len(data)} records)\n" + "─"*42]
+    
+    lines = [f"### 💬 Customer Feedback ({len(data)} total)\n---"]
     for fb in data[:20]:
-        name   = (fb.get("customer_name") or fb.get("name") or "—").title()
+        name   = (fb.get("customer_name") or fb.get("name") or "Anonymous").title()
         phone  = fb.get("customer_phone") or fb.get("phone") or "—"
-        # Try all possible field names for the feedback text
         msg    = (fb.get("message") or fb.get("comment") or
-                  fb.get("text") or fb.get("feedback") or fb.get("body") or "").strip()
-        rating = fb.get("rating")
+                  fb.get("text") or fb.get("feedback") or "").strip()
+        rating = fb.get("rating", 0)
         stars  = ("⭐" * int(rating)) if rating else "☆☆☆☆☆"
         created = fb.get("created_at","")
-        ts = created.strftime("%d %b %Y") if hasattr(created,"strftime") else str(created)[:10] if created else ""
-        lines.append(f"  👤 {name}  ·  📱 {phone}  {stars}")
-        if msg:
-            lines.append(f"  💬 {msg}")
-        else:
-            lines.append(f"  💬 (koi message nahi)")
-        if ts: lines.append(f"  📅 {ts}")
-        lines.append("")
+        ts = created.strftime("%d %b %Y") if hasattr(created,"strftime") else str(created)[:10] if created else "—"
+        
+        lines += [
+            f"#### {stars} — {name}",
+            f"- 📱 **Phone**: {phone}",
+            f"- 💬 **Message**: {msg if msg else '*(No text message)*'}",
+            f"- 📅 **Date**: {ts}",
+            "---"
+        ]
     return "\n".join(lines)
 
 
@@ -1638,22 +1670,19 @@ async def responder_node(state: AgentState) -> dict:
             PAY={"cash":"Cash on Delivery","easypaisa":"EasyPaisa","jazzcash":"JazzCash","card":"Card"}
             oid=p.get("order_id","?"); its=p.get("items",[]); tot=p.get("total",0)
             eta=p.get("eta",30); pay=PAY.get(p.get("payment","cash"),"Cash on Delivery")
-            lines=["╔════════════════════════════════════════╗",
-                   "║       ✅   ORDER CONFIRMED!   ✅         ║",
-                   "╠════════════════════════════════════════╣",
-                   f"  Order ID : #{oid}","────────────────────────────────────────","  ITEMS:"]
+            lines=[f"### ✅ ORDER CONFIRMED! `#{oid}`",
+                   "---",
+                   "**📦 ITEMS:**"]
             for it in its:
-                lines.append(f"  {it.get('qty',1)}x {it.get('name','').title():<26} Rs {it.get('subtotal',0):>6,.0f}")
-            lines+=["────────────────────────────────────────",
-                    f"  💰 TOTAL                    Rs {tot:>6,.0f}",
-                    f"  🕐 ETA                      ~{eta} minutes",
-                    f"  💳 Payment                  {pay}"]
-            if p.get("address"): lines.append(f"  📍 Address               {p['address']}")
+                lines.append(f"- {it.get('qty',1)}x **{it.get('name','').title()}** — Rs {it.get('subtotal',0):,.0f}")
+            lines+=[f"\n**💰 TOTAL: Rs {tot:,.0f}**",
+                    f"**🕐 ETA:** ~{eta} minutes",
+                    f"**💳 Payment:** {pay}"]
+            if p.get("address"): lines.append(f"**📍 Address:** {p['address']}")
             if p.get("unavailable"):
-                lines.append(f"\n⚠️  Hataye gaye (unavailable): {', '.join(p['unavailable'])}")
-            lines+=["╚════════════════════════════════════════╝",
-                    "\n🙏 Order receive ho gaya! Tayari par inform karein ge."]
-            return {**state,"final_response":"\n".join(lines),"conv_stage":"","order_draft":{}}
+                lines.append(f"\n⚠️ **Not Available:** {', '.join(p['unavailable'])}")
+            lines.append("\n🙏 Order receive ho gaya! Tayari par inform karein ge.")
+            return {**state,"final_response":"\n".join(lines),"conv_stage":"","order_draft":{}, "res_type":"bill", "res_data":p}
     except Exception: pass
 
     # ── Order modified (add/remove items from placed order) ─────────────────
@@ -1669,29 +1698,24 @@ async def responder_node(state: AgentState) -> dict:
             addr = p.get("address","")
             unavail = p.get("unavailable",[])
             lines = [
-                "╔════════════════════════════════════════╗",
-                "║      ✏️   ORDER UPDATED!   ✏️            ║",
-                "╠════════════════════════════════════════╣",
-                f"  Order ID : #{oid}",
-                "────────────────────────────────────────",
-                "  UPDATED ITEMS:",
+                f"### ✏️ ORDER UPDATED! `#{oid}`",
+                "---",
+                "**📦 UPDATED ITEMS:**",
             ]
             for it in its:
-                lines.append(f"  {it.get('qty',1)}x {it.get('name','').title():<26} Rs {it.get('subtotal',0):>6,.0f}")
+                lines.append(f"- {it.get('qty',1)}x **{it.get('name','').title()}** — Rs {it.get('subtotal',0):,.0f}")
             lines += [
-                "────────────────────────────────────────",
-                f"  💰 NEW TOTAL               Rs {tot:>6,.0f}",
-                f"  🕐 ETA                      ~{eta} minutes",
-                f"  💳 Payment                  {pay}",
+                f"\n**💰 NEW TOTAL: Rs {tot:,.0f}**",
+                f"**🕐 ETA:** ~{eta} minutes",
+                f"**💳 Payment:** {pay}",
             ]
-            if addr: lines.append(f"  📍 Address               {addr}")
+            if addr: lines.append(f"**📍 Address:** {addr}")
             if unavail:
-                lines.append(f'\n⚠️  Unavailable (nahi add ho sake): {", ".join(unavail)}')
+                lines.append(f'\n⚠️ **Unavailable:** {", ".join(unavail)}')
             lines += [
-                "╚════════════════════════════════════════╝",
                 "\n✅ Order update ho gaya! Kitchen ko inform kar diya gaya.",
             ]
-            return {**state, "final_response": "\n".join(lines)}
+            return {**state, "final_response": "\n".join(lines), "res_type":"bill", "res_data":p}
     except Exception: pass
 
     # ── Staff write success ───────────────────────────────────────────────────

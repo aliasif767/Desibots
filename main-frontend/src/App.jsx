@@ -10,6 +10,7 @@ import PakOrderBot from './pages/PakOrderBot';
 import StaffDashboard from './pages/StaffDashboard';
 import SehatStaffDashboard from './pages/SehatStaffDashboard';
 import Admin from './pages/Admin';
+import UserManagement from './pages/UserManagement';
 
 const API_BASE = '/api';
 
@@ -105,10 +106,11 @@ function App() {
     <Router>
       <AppLayout token={token} subscribedBots={subscribedBots} username={username} role={role} handleLogout={handleLogout}>
         <Routes>
-          <Route path="/" element={token ? <Navigate to="/dashboard" /> : <Navigate to="/auth" />} />
-          <Route path="/auth" element={!token ? <Auth onLogin={handleLogin} apiBase={API_BASE} /> : <Navigate to="/dashboard" />} />
-          <Route path="/dashboard" element={token ? <Dashboard token={token} subscribedBots={subscribedBots} setSubscribedBots={setSubscribedBots} role={role} apiBase={API_BASE} /> : <Navigate to="/auth" />} />
+          <Route path="/" element={token ? (role === 'admin' ? <Navigate to="/admin" /> : <Navigate to="/dashboard" />) : <Navigate to="/auth" />} />
+          <Route path="/auth" element={!token ? <Auth onLogin={handleLogin} apiBase={API_BASE} /> : (role === 'admin' ? <Navigate to="/admin" /> : <Navigate to="/dashboard" />)} />
+          <Route path="/dashboard" element={token ? (role === 'admin' ? <Navigate to="/admin" /> : <Dashboard token={token} subscribedBots={subscribedBots} setSubscribedBots={setSubscribedBots} role={role} apiBase={API_BASE} />) : <Navigate to="/auth" />} />
           <Route path="/admin" element={token && role === 'admin' ? <Admin token={token} apiBase={API_BASE} /> : <Navigate to="/dashboard" />} />
+          <Route path="/admin/users" element={token && role === 'admin' ? <UserManagement token={token} apiBase={API_BASE} /> : <Navigate to="/dashboard" />} />
           
           {/* Bot Pages */}
           <Route path="/bot/firstaid" element={token ? <FirstAidBot token={token} /> : <Navigate to="/auth" />} />

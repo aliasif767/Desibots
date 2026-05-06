@@ -173,28 +173,54 @@ Do not include any other text besides the JSON.
 
     context_text = "\n\n".join(formatted_chunks)
 
-    # 5. Build messages
+    # 3. Detect Language
+    is_urdu_query = any(ord(c) > 127 for c in request.query) or any(w in request.query.lower() for w in ['hai', 'kia', 'kaise', 'kab', 'kon'])
+    
+    # 4. RAG search
+    context_chunks = law_engine.search(request.query, top_k=2)
+
+    # 5. Build context
+    formatted_chunks = []
+    for c in context_chunks:
+        clean_text = limit_tokens(c["text"])
+        formatted_chunks.append(f"FROM {c['metadata']['source']}:\n{clean_text}")
+
+    context_text = "\n\n".join(formatted_chunks)
+
+    # 6. Build messages
     system_prompt = (
         "You are a friendly and expert Pakistani Legal Assistant. Your goal is to explain "
         "complex legal matters to a client who does not have a legal background. Use very "
         "simple, everyday language and avoid difficult legal jargon.\n\n"
-        "LANGUAGE RULE: Detect the user's language. If the user asks in English, respond in English. "
-        "If the user asks in Roman Urdu (Urdu written in English script) or Urdu script, you MUST "
-        "respond in simple Roman Urdu (Urdu written in English alphabets) so they can understand "
-        "easily. Use common Urdu words that are easy for a layman.\n\n"
+        "LANGUAGE RULE: You MUST detect the user's language. \n"
+        "1. If the user asks in English, respond in English.\n"
+        "2. If the user asks in Urdu script OR Roman Urdu (Urdu written in English script), "
+        "you MUST respond ENTIRELY in simple Roman Urdu (Urdu written in English alphabets). \n"
+        "Do NOT use Urdu script in your response. Do NOT mix English sentences unless they are common terms.\n\n"
         "Imagine you are a lawyer talking to a client in a way they can easily understand. "
-        "Answer strictly using the provided context. If the user expresses a desire for "
-        "professional representation or a specific appointment, advise them to use the booking form."
+        "Answer strictly using the provided context."
     )
+    
     user_content = (
-        f"CONTEXT:\n{context_text}\n\n"
+        f"CONTEXT FROM LAW BOOKS:\n{context_text}\n\n"
         f"QUESTION: {request.query}\n\n"
-        f"FORMAT (Respond in the SAME language as the detected user language):\n"
-        f"1. SIMPLE SUMMARY: A very easy explanation in 2-3 sentences (no jargon).\n"
-        f"2. THE LAW: Mention relevant Sections/Articles but explain them like you are talking to a friend.\n"
-        f"3. STEPS TO TAKE: Simple, actionable advice for the client.\n"
-        f"4. DISCLAIMER"
+        f"FORMAT (Respond in the SAME language as the user query):\n"
     )
+    
+    if is_urdu_query:
+        user_content += (
+            "1. SADA KHULASA: A very easy explanation in Roman Urdu (2-3 sentences).\n"
+            "2. QANOON KI ROSHNI MEIN: Explain relevant Sections/Articles in Roman Urdu like a friend.\n"
+            "3. AGLE QADAM: Actionable steps in Roman Urdu.\n"
+            "4. DISCLAIMER (Roman Urdu)"
+        )
+    else:
+        user_content += (
+            "1. SIMPLE SUMMARY: A very easy explanation in English (2-3 sentences).\n"
+            "2. THE LAW: Mention relevant Sections/Articles and explain them simply.\n"
+            "3. STEPS TO TAKE: Actionable steps for the client.\n"
+            "4. DISCLAIMER"
+        )
 
     messages = [{"role": "system", "content": system_prompt}]
     for h in (request.history or [])[-4:]:

@@ -29,10 +29,16 @@ const whatsAppSessionSchema = new mongoose.Schema({
     lastInteraction: { type: Date, default: Date.now }
 });
 
+const platformSettingsSchema = new mongoose.Schema({
+    key: { type: String, required: true, unique: true },
+    value: { type: mongoose.Schema.Types.Mixed, required: true }
+});
+
 const User = mongoose.model('User', userSchema);
 const Subscription = mongoose.model('Subscription', subscriptionSchema);
 const TokenUsage = mongoose.model('TokenUsage', tokenUsageSchema);
 const WhatsAppSession = mongoose.model('WhatsAppSession', whatsAppSessionSchema);
+const PlatformSettings = mongoose.model('PlatformSettings', platformSettingsSchema);
 
 async function setupDB() {
     await mongoose.connect(MONGO_URI);
@@ -47,4 +53,4 @@ async function setupDB() {
     }
 }
 
-module.exports = { setupDB, User, Subscription, TokenUsage, WhatsAppSession, mongoose };
+module.exports = { setupDB, User, Subscription, TokenUsage, WhatsAppSession, PlatformSettings, mongoose };

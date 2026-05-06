@@ -40,8 +40,15 @@ function Dashboard({ token, subscribedBots, setSubscribedBots, role, apiBase }) 
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [billing, setBilling] = useState(null);
+  const [statusMap, setStatusMap] = useState({});
+  const [showMaintenanceModal, setShowMaintenanceModal] = useState(false);
 
   React.useEffect(() => {
+    fetch(`${apiBase}/status`)
+      .then(res => res.json())
+      .then(data => setStatusMap(data))
+      .catch(err => console.error(err));
+
     fetch(`${apiBase}/billing`, {
       headers: { 'Authorization': `Bearer ${token}` }
     })
@@ -53,11 +60,17 @@ function Dashboard({ token, subscribedBots, setSubscribedBots, role, apiBase }) 
   const isAdmin = role === 'admin';
   const isBotSubscribed = (botId) => isAdmin || (subscribedBots && subscribedBots.includes(botId));
 
+  const isBotDown = (botId) => statusMap.maintenanceMode || statusMap[`maintenance_${botId}`];
+
   const filteredBots = tab === 'subs'
     ? BOTS.filter(bot => subscribedBots.includes(bot.id))
     : BOTS;
 
   const handleBotClick = (botId) => {
+    if (isBotDown(botId) && !isAdmin) {
+      setShowMaintenanceModal(true);
+      return;
+    }
     if (isBotSubscribed(botId)) {
       navigate(`/bot/${botId}`);
     } else {
@@ -98,6 +111,37 @@ function Dashboard({ token, subscribedBots, setSubscribedBots, role, apiBase }) 
 
   return (
     <div className="dashboard-content">
+      {/* Maintenance Modal */}
+      <AnimatePresence>
+        {showMaintenanceModal && (
+          <motion.div
+            className="modal-overlay"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            style={{ zIndex: 2000 }}
+          >
+            <motion.div
+              className="modal-content"
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              style={{ textAlign: 'center', border: '1px solid #ef4444' }}
+            >
+              <div style={{ width: 64, height: 64, background: 'rgba(239, 68, 68, 0.1)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.5rem', color: '#ef4444' }}>
+                <ShieldCheck size={32} />
+              </div>
+              <h2 style={{ fontSize: '1.75rem', marginBottom: '1rem' }}>System <span style={{ color: '#ef4444' }}>Maintenance</span></h2>
+              <p style={{ color: 'var(--text-muted)', lineHeight: '1.6', marginBottom: '2rem' }}>
+                We are currently performing scheduled upgrades to our AI neural networks to provide you with better performance. All bot services are temporarily offline.
+              </p>
+              <button className="btn btn-outline" onClick={() => setShowMaintenanceModal(false)} style={{ width: '100%' }}>
+                Understood
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
       <motion.div
         className="dashboard-hero"
         initial={{ opacity: 0, y: -20 }}
@@ -132,8 +176,10 @@ function Dashboard({ token, subscribedBots, setSubscribedBots, role, apiBase }) 
               <h3>{bot.name}</h3>
               <p>{bot.description}</p>
 
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: subscribed ? bot.color : 'var(--text-muted)', fontWeight: 600, fontSize: '0.9rem', marginTop: 'auto' }}>
-                {subscribed ? (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: isBotDown(bot.id) && !isAdmin ? '#ef4444' : (subscribed ? bot.color : 'var(--text-muted)'), fontWeight: 600, fontSize: '0.9rem', marginTop: 'auto' }}>
+                {isBotDown(bot.id) && !isAdmin ? (
+                  <><span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}><ShieldCheck size={16} /> Maintenance</span> <ArrowRight size={18} /></>
+                ) : subscribed ? (
                   <><span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}><ShieldCheck size={16} /> Authorized</span> <ArrowRight size={18} /></>
                 ) : (
                   <><span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}><Lock size={16} /> Upgrade Required</span> <ArrowRight size={18} /></>

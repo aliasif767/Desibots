@@ -9,7 +9,7 @@ const crypto = require('crypto');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const { createProxyMiddleware, responseInterceptor } = require('http-proxy-middleware');
-const { setupDB, User, Subscription, TokenUsage } = require('./db.js');
+const { setupDB, User, Subscription, TokenUsage, PlatformSettings } = require('./db.js');
 const mongoose = require('mongoose');
 const cookieParser = require('cookie-parser');
 
@@ -68,6 +68,21 @@ const requireAdmin = async (req, res, next) => {
   res.status(403).json({ error: 'Admin Access Required' });
 };
 
+const checkMaintenanceMode = (botKey) => async (req, res, next) => {
+  if (req.user && req.user.role === 'admin') return next();
+  try {
+    const globalMaint = await PlatformSettings.findOne({ key: 'maintenanceMode' });
+    const botMaint = await PlatformSettings.findOne({ key: `maintenance_${botKey}` });
+    
+    if ((globalMaint && globalMaint.value === true) || (botMaint && botMaint.value === true)) {
+      return res.status(503).json({ error: `${botKey} is currently under maintenance. Please try again later.` });
+    }
+    next();
+  } catch {
+    next();
+  }
+};
+
 // ──────────────────────────────────────────────────────────────────
 // BOT API PROXY
 const makeBotApiProxy = (botKey) => {
@@ -121,7 +136,7 @@ const makeBotApiProxy = (botKey) => {
              const reqTokens = Math.ceil(reqString.length / 4);
              const resTokens = Math.ceil(resString.length / 4);
              const totalTokens = reqTokens + resTokens;
-
+ 
              if (totalTokens > 0) {
                TokenUsage.create({
                    userId: req.user.id,
@@ -169,10 +184,13 @@ app.use('/whatsapp', createProxyMiddleware({
 
 Object.keys(BOT_API_URLS).forEach(botKey => {
   const isUI = botKey.endsWith('-ui');
+  const actualBotId = isUI ? botKey.replace('-ui','') : botKey;
+  
   app.use(
     `/api/bot/${botKey}`,
     authenticateToken,
-    requireBotSubscription(isUI ? botKey.replace('-ui','') : botKey),
+    checkMaintenanceMode(actualBotId),
+    requireBotSubscription(actualBotId),
     isUI ? createProxyMiddleware({
       target: BOT_API_URLS[botKey],
       changeOrigin: true,
@@ -191,14 +209,19 @@ Object.keys(BOT_API_URLS).forEach(botKey => {
 // ──────────────────────────────────────────────────────────────────
 // INTERNAL API ROUTES
 const apiRouter = express.Router();
-// Mount body parser ONLY for internal API routes so it doesn't break Proxy payload
 apiRouter.use(express.json());
 
 apiRouter.post('/signup', async (req, res) => {
   const { username, password } = req.body;
   if (!username || !password)
     return res.status(400).json({ error: 'Username and password required' });
+  
   try {
+    const signupSetting = await PlatformSettings.findOne({ key: 'allowSignups' });
+    if (signupSetting && signupSetting.value === false) {
+      return res.status(403).json({ error: 'Registration is currently disabled by administrator.' });
+    }
+
     const hashed = await bcrypt.hash(password, 10);
     await User.create({ username, password: hashed });
     res.status(201).json({ message: 'User created' });
@@ -220,6 +243,61 @@ apiRouter.post('/login', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Server error' });
+  }
+});
+
+apiRouter.get('/status', async (req, res) => {
+  try {
+    const settings = await PlatformSettings.find({ key: { $regex: /^maintenance/ } });
+    const statusMap = {};
+    settings.forEach(s => statusMap[s.key] = s.value);
+    res.json(statusMap);
+  } catch {
+    res.json({ maintenanceMode: false });
+  }
+});
+
+apiRouter.get('/admin/users', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const users = await User.find({ role: 'user' }).lean();
+    const subs = await Subscription.find();
+    
+    const usersWithSubs = users.map(user => ({
+      _id: user._id,
+      username: user.username,
+      subscriptions: subs.filter(s => s.userId.toString() === user._id.toString() && s.active).map(s => s.botId)
+    }));
+    
+    res.json(usersWithSubs);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+apiRouter.delete('/admin/users/:id', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    await User.findByIdAndDelete(req.params.id);
+    await Subscription.deleteMany({ userId: req.params.id });
+    await TokenUsage.deleteMany({ userId: req.params.id });
+    res.json({ message: 'User deleted' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+apiRouter.post('/admin/users/:id/toggle-subscription', authenticateToken, requireAdmin, async (req, res) => {
+  const { botId } = req.body;
+  try {
+    const existing = await Subscription.findOne({ userId: req.params.id, botId });
+    if (existing) {
+      existing.active = !existing.active;
+      await existing.save();
+    } else {
+      await Subscription.create({ userId: req.params.id, botId, active: true });
+    }
+    res.json({ message: 'Subscription updated' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -477,6 +555,33 @@ apiRouter.get('/admin/metrics', authenticateToken, requireAdmin, async (req, res
   }
 });
 
+apiRouter.get('/admin/settings', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const settings = await PlatformSettings.find();
+    const settingsMap = {};
+    settings.forEach(s => settingsMap[s.key] = s.value);
+    
+    // Ensure defaults if not in DB
+    if (settingsMap.allowSignups === undefined) settingsMap.allowSignups = true;
+    if (settingsMap.maintenanceMode === undefined) settingsMap.maintenanceMode = false;
+    
+    res.json(settingsMap);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch settings' });
+  }
+});
+
+apiRouter.post('/admin/settings', authenticateToken, requireAdmin, async (req, res) => {
+  const { key, value } = req.body;
+  if (!key) return res.status(400).json({ error: 'Key required' });
+  try {
+    await PlatformSettings.findOneAndUpdate({ key }, { value }, { upsert: true });
+    res.json({ success: true, message: `Setting ${key} updated` });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update setting' });
+  }
+});
+
 const RATE_PER_TOKEN = 0.05; // PKR per token
 
 apiRouter.get('/billing', authenticateToken, async (req, res) => {
@@ -549,10 +654,10 @@ const server = app.listen(PORT, () => {
 // ──────────────────────────────────────────────────────────────────
 const ROOT_DIR = path.join(__dirname, '..');
 const BOTS = [
-  { name: 'FirstAid API', cwd: path.join(ROOT_DIR, 'firstaid', 'backend'), cmd: 'python', args: ['-m', 'uvicorn', 'app.main:app', '--host', '127.0.0.1', '--port', '8510', '--reload'] },
-  { name: 'HisabBot', cwd: path.join(ROOT_DIR, 'hisabbot'), cmd: 'python', args: ['-m', 'uvicorn', 'app.main:app', '--host', '127.0.0.1', '--port', '8511', '--reload'] },
-  { name: 'PakOrderBot', cwd: path.join(ROOT_DIR, 'pakorderbot'), cmd: 'python', args: ['-m', 'uvicorn', 'agent.main:app', '--host', '127.0.0.1', '--port', '8512', '--reload'] },
-  { name: 'LawBot', cwd: path.join(ROOT_DIR, 'lawyerbot'), cmd: 'python', args: ['-m', 'uvicorn', 'server:app', '--host', '127.0.0.1', '--port', '8513', '--reload'] },
+  { name: 'FirstAid API', cwd: path.join(ROOT_DIR, 'firstaid', 'backend'), cmd: 'python', args: ['-m', 'uvicorn', 'app.main:app', '--host', '127.0.0.1', '--port', '8510'] },
+  { name: 'HisabBot', cwd: path.join(ROOT_DIR, 'hisabbot'), cmd: 'python', args: ['-m', 'uvicorn', 'app.main:app', '--host', '127.0.0.1', '--port', '8511'] },
+  { name: 'PakOrderBot', cwd: path.join(ROOT_DIR, 'pakorderbot'), cmd: 'python', args: ['-m', 'uvicorn', 'agent.main:app', '--host', '127.0.0.1', '--port', '8512'] },
+  { name: 'LawBot', cwd: path.join(ROOT_DIR, 'lawyerbot'), cmd: 'python', args: ['-m', 'uvicorn', 'server:app', '--host', '127.0.0.1', '--port', '8513'] },
   { name: 'PakOrderBot UI', cwd: path.join(ROOT_DIR, 'pakorderbot', 'frontend'), cmd: 'python', args: ['-m', 'streamlit', 'run', 'app.py', '--server.port', '8501', '--server.headless', 'true'] }
 ];
 

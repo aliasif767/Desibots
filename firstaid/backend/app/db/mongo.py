@@ -27,7 +27,8 @@ def get_db():
     return db_instance.db
 
 def get_user_db(tenant_id: str = "default"):
-    return db_instance.client[f"{settings.MONGODB_DB}_{tenant_id}"]
+    safe_tenant = str(tenant_id).replace(".", "_").replace("@", "_").replace(" ", "_")
+    return db_instance.client[f"{settings.MONGODB_DB}_{safe_tenant}"]
 
 def generate_doctor_id():
     """Generate a unique doctor ID."""

@@ -3,6 +3,9 @@ import sys
 import os
 from fastapi import FastAPI, Request, Header
 from fastapi.middleware.cors import CORSMiddleware
+from dotenv import load_dotenv
+
+load_dotenv()
 from pydantic import BaseModel
 from typing import List, Optional
 from app.graph.workflow import hisabbot_agent

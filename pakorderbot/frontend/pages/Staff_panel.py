@@ -1097,7 +1097,7 @@ elif tab == "feedback":
     # Prefer direct DB; fall back to API endpoint
     feedbacks = _db_fetch_feedback()
     if not feedbacks:
-        fb_data, fb_code = _api("/feedback")
+        fb_data, fb_code = _api("/staff/feedback")
         feedbacks = fb_data.get("feedback", []) if fb_code == 200 else []
 
     col_ref2, _ = st.columns([1, 7])
